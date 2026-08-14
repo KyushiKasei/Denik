@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}{% if place %}Upravit {{ place.name }}{% else %}Nové místo{% endif %} — Památky{% endblock %}
+{% block content %}
+<h1>{% if place %}Upravit místo{% else %}Nové místo{% endif %}</h1>
+{% if place %}
+<p class="public-id">Interní ID (neměnné): <code>{{ place.public_id }}</code></p>
+{% endif %}
+
+{% if form.errors %}
+<p class="error">Formulář obsahuje chyby. Nic se neuložilo.</p>
+{% endif %}
+
+<form method="post" action="{% if place %}/places/{{ place.public_id }}{% else %}/places{% endif %}">
+  <fieldset>
+    <legend>Základní údaje</legend>
+    <label class="{% if form.errors.name %}field-error{% endif %}">Název *
+      <input type="text" name="name" value="{{ form.name }}" required maxlength="300">
+      {% if form.errors.name %}<small class="error">{{ form.errors.name }}</small>{% endif %}
+    </label>
+    <label>Krátký název
+      <input type="text" name="short_name" value="{{ form.short_name or '' }}" maxlength="120">
+    </label>
+    <label>Další názvy <small>(každý na nový řádek)</small>
+      <textarea name="alternative_names" rows="3">{{ form.alternative_names_text() }}</textarea>
+    </label>
+    <label>Krátký popis
+      <textarea name="short_description" rows="4">{{ form.short_description or '' }}</textarea>
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Typy</legend>
+    <p class="muted">Místo může mít víc typů najednou (např. hrad i zámek). CASTLE_CHATEAU neexistuje.</p>
+    {% if form.errors.type_codes %}<p class="error">{{ form.errors.type_codes }}</p>{% endif %}
+    <div class="types-grid">
+      {% for item in place_types %}
+      <label>
+        <input type="checkbox" name="type_codes" value="{{ item.code }}"
+               {% if item.code in form.type_codes %}checked{% endif %}>
+        {{ item.name_cs }}
+      </label>
+      {% endfor %}
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Stav a kvalita</legend>
+    <div class="grid">
+      <label class="{% if form.errors.condition %}field-error{% endif %}">Stav objektu
+        <select name="condition">
+          {% for item in conditions %}
+          <option value="{{ item.code }}" {% if form.condition == item.code %}selected{% endif %}>{{ item.name_cs }}</option>
+          {% endfor %}
+        </select>
+        {% if form.errors.condition %}<small class="error">{{ form.errors.condition }}</small>{% endif %}
+      </label>
+      <label class="{% if form.errors.visitability %}field-error{% endif %}">Přístupnost
+        <select name="visitability">
+          {% for item in visitabilities %}
+          <option value="{{ item.code }}" {% if form.visitability == item.code %}selected{% endif %}>{{ item.name_cs }}</option>
+          {% endfor %}
+        </select>
+        {% if form.errors.visitability %}<small class="error">{{ form.errors.visitability }}</small>{% endif %}
+      </label>
+      <label class="{% if form.errors.quality_status %}field-error{% endif %}">Kvalita dat
+        <select name="quality_status">
+          {% for item in quality_statuses %}
+          <option value="{{ item.code }}" {% if form.quality_status == item.code %}selected{% endif %}>{{ item.name_cs }}</option>
+          {% endfor %}
+        </select>
+        {% if form.errors.quality_status %}<small class="error">{{ form.errors.quality_status }}</small>{% endif %}
+      </label>
+      <label class="{% if form.errors.heritage_status %}field-error{% endif %}">Památková ochrana
+        <select name="heritage_status">
+          <option value="">—</option>
+          {% for item in heritage_statuses %}
+          <option value="{{ item.code }}" {% if form.heritage_status == item.code %}selected{% endif %}>{{ item.name_cs }}</option>
+          {% endfor %}
+        </select>
+        {% if form.errors.heritage_status %}<small class="error">{{ form.errors.heritage_status }}</small>{% endif %}
+      </label>
+    </div>
+    <label>
+      <input type="checkbox" name="unesco" value="1" {% if form.unesco %}checked{% endif %}>
+      UNESCO
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Lokalita</legend>
+    {% if form.errors.coordinates %}<p class="error">{{ form.errors.coordinates }}</p>{% endif %}
+    <div class="grid">
+      <label class="{% if form.errors.latitude %}field-error{% endif %}">Zeměpisná šířka
+        <input type="text" name="latitude" inputmode="decimal"
+               value="{% if form.latitude is not none %}{{ form.latitude }}{% endif %}"
+               placeholder="49.704">
+        {% if form.errors.latitude %}<small class="error">{{ form.errors.latitude }}</small>{% endif %}
+      </label>
+      <label class="{% if form.errors.longitude %}field-error{% endif %}">Zeměpisná délka
+        <input type="text" name="longitude" inputmode="decimal"
+               value="{% if form.longitude is not none %}{{ form.longitude }}{% endif %}"
+               placeholder="16.891">
+        {% if form.errors.longitude %}<small class="error">{{ form.errors.longitude }}</small>{% endif %}
+      </label>
+    </div>
+    <label>Adresa
+      <input type="text" name="address" value="{{ form.address or '' }}" maxlength="400">
+    </label>
+    <div class="grid">
+      <label>Obec
+        <input type="text" name="municipality" value="{{ form.municipality or '' }}" maxlength="120">
+      </label>
+      <label>Kód obce (RÚIAN)
+        <input type="text" name="municipality_code" value="{{ form.municipality_code or '' }}" maxlength="20">
+      </label>
+    </div>
+    <div class="grid">
+      <label>Okres
+        <input type="text" name="district" value="{{ form.district or '' }}" maxlength="120">
+      </label>
+      <label>Kód okresu
+        <input type="text" name="district_code" value="{{ form.district_code or '' }}" maxlength="20">
+      </label>
+    </div>
+    <div class="grid">
+      <label>Kraj
+        <input type="text" name="region" value="{{ form.region or '' }}" maxlength="120">
+      </label>
+      <label>Kód kraje
+        <input type="text" name="region_code" value="{{ form.region_code or '' }}" maxlength="20">
+      </label>
+    </div>
+    <label class="{% if form.errors.country %}field-error{% endif %}">Země
+      <input type="text" name="country" value="{{ form.country }}" maxlength="8">
+      {% if form.errors.country %}<small class="error">{{ form.errors.country }}</small>{% endif %}
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Odkazy</legend>
+    <label class="{% if form.errors.official_website %}field-error{% endif %}">Oficiální web
+      <input type="url" name="official_website" value="{{ form.official_website or '' }}">
+      {% if form.errors.official_website %}<small class="error">{{ form.errors.official_website }}</small>{% endif %}
+    </label>
+    <label class="{% if form.errors.wikipedia_url %}field-error{% endif %}">Wikipedia
+      <input type="url" name="wikipedia_url" value="{{ form.wikipedia_url or '' }}">
+      {% if form.errors.wikipedia_url %}<small class="error">{{ form.errors.wikipedia_url }}</small>{% endif %}
+    </label>
+    <label class="{% if form.errors.opening_hours_url %}field-error{% endif %}">Otevírací doba (URL)
+      <input type="url" name="opening_hours_url" value="{{ form.opening_hours_url or '' }}">
+      {% if form.errors.opening_hours_url %}<small class="error">{{ form.errors.opening_hours_url }}</small>{% endif %}
+    </label>
+    <label class="{% if form.errors.ticket_url %}field-error{% endif %}">Vstupenky (URL)
+      <input type="url" name="ticket_url" value="{{ form.ticket_url or '' }}">
+      {% if form.errors.ticket_url %}<small class="error">{{ form.errors.ticket_url }}</small>{% endif %}
+    </label>
+  </fieldset>
+
+  <div class="actions-row">
+    <button type="submit">{% if place %}Uložit změny{% else %}Založit místo{% endif %}</button>
+    {% if place %}
+    <a href="/places/{{ place.public_id }}" class="secondary">Zrušit</a>
+    {% else %}
+    <a href="/places" class="secondary">Zrušit</a>
+    {% endif %}
+  </div>
+</form>
+{% endblock %}

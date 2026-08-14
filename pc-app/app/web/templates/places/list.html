@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}Katalog — Památky{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <h1>Katalog</h1>
+  <a href="/places/new" role="button">Nové místo</a>
+</div>
+
+<form class="filters" method="get" action="/places"
+      hx-get="/places"
+      hx-target="#place-list"
+      hx-select="#place-list"
+      hx-push-url="true"
+      hx-trigger="submit, change delay:200ms from:select, change from:input[type=checkbox], search delay:400ms from:input[name=q]">
+  <label class="span-2">Hledání
+    <input type="search" name="q" value="{{ filters.q }}" placeholder="Název, obec, kraj…">
+  </label>
+  <label>Typ
+    <select name="type">
+      <option value="">Vše</option>
+      {% for item in place_types %}
+      <option value="{{ item.code }}" {% if filters.type_code == item.code %}selected{% endif %}>{{ item.name_cs }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Kraj
+    <select name="region">
+      <option value="">Vše</option>
+      {% for item in regions %}
+      <option value="{{ item }}" {% if filters.region == item %}selected{% endif %}>{{ item }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Okres
+    <select name="district">
+      <option value="">Vše</option>
+      {% for item in districts %}
+      <option value="{{ item }}" {% if filters.district == item %}selected{% endif %}>{{ item }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Obec
+    <select name="municipality">
+      <option value="">Vše</option>
+      {% for item in municipalities %}
+      <option value="{{ item }}" {% if filters.municipality == item %}selected{% endif %}>{{ item }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Stav
+    <select name="condition">
+      <option value="">Vše</option>
+      {% for item in conditions %}
+      <option value="{{ item.code }}" {% if filters.condition == item.code %}selected{% endif %}>{{ item.name_cs }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Přístupnost
+    <select name="visitability">
+      <option value="">Vše</option>
+      {% for item in visitabilities %}
+      <option value="{{ item.code }}" {% if filters.visitability == item.code %}selected{% endif %}>{{ item.name_cs }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Kvalita
+    <select name="quality_status">
+      <option value="">Vše</option>
+      {% for item in quality_statuses %}
+      <option value="{{ item.code }}" {% if filters.quality_status == item.code %}selected{% endif %}>{{ item.name_cs }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Zobrazení
+    <select name="archived">
+      <option value="active" {% if filters.archived == "active" %}selected{% endif %}>Aktivní</option>
+      <option value="archived" {% if filters.archived == "archived" %}selected{% endif %}>Archiv</option>
+      <option value="all" {% if filters.archived == "all" %}selected{% endif %}>Vše</option>
+    </select>
+  </label>
+  <label>Řazení
+    <select name="sort">
+      {% for code, title in sort_choices.items() %}
+      <option value="{{ code }}" {% if filters.sort == code %}selected{% endif %}>{{ title }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <div class="check-row">
+    <label><input type="checkbox" name="missing_gps" value="1" {% if filters.missing_gps %}checked{% endif %}> Chybějící GPS</label>
+    <label><input type="checkbox" name="missing_type" value="1" {% if filters.missing_type %}checked{% endif %}> Chybějící typ</label>
+    <button type="submit" class="secondary">Filtrovat</button>
+  </div>
+</form>
+
+<div id="place-list">
+  <p class="muted">
+    {% if result.total %}
+      {{ result.total }} míst{% if result.pages > 1 %}, strana {{ result.page }} / {{ result.pages }}{% endif %}
+    {% else %}
+      Žádné místo nevyhovuje filtrům.
+    {% endif %}
+  </p>
+  {% if result.places %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Název</th>
+          <th>Typy</th>
+          <th>Obec</th>
+          <th>Okres</th>
+          <th>Kraj</th>
+          <th>Kvalita</th>
+          <th>GPS</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for place in result.places %}
+        <tr>
+          <td>
+            <a href="/places/{{ place.public_id }}">{{ place.name }}</a>
+            {% if place.is_archived %}<span class="badge badge-muted">Archiv</span>{% endif %}
+          </td>
+          <td>{{ place.types_cs }}</td>
+          <td>{{ place.municipality or "—" }}</td>
+          <td>{{ place.district or "—" }}</td>
+          <td>{{ place.region or "—" }}</td>
+          <td>{{ enum_label("quality_status", place.quality_status) }}</td>
+          <td>{% if place.has_gps %}ano{% else %}ne{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+  {% if result.pages > 1 %}
+  <nav class="pagination">
+    {% if result.page > 1 %}
+    <a href="/places?{{ filters.query_string(result.page - 1) }}"
+       hx-get="/places?{{ filters.query_string(result.page - 1) }}"
+       hx-target="#place-list"
+       hx-select="#place-list"
+       hx-push-url="true">← Novější / předchozí</a>
+    {% else %}
+    <span></span>
+    {% endif %}
+    <span class="muted">Strana {{ result.page }} / {{ result.pages }}</span>
+    {% if result.page < result.pages %}
+    <a href="/places?{{ filters.query_string(result.page + 1) }}"
+       hx-get="/places?{{ filters.query_string(result.page + 1) }}"
+       hx-target="#place-list"
+       hx-select="#place-list"
+       hx-push-url="true">Další →</a>
+    {% else %}
+    <span></span>
+    {% endif %}
+  </nav>
+  {% endif %}
+</div>
+{% endblock %}

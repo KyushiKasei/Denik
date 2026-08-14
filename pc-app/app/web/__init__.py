@@ -1,0 +1,1 @@
+"""Webová vrstva PC aplikace."""

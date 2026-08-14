@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Památky{% endblock %}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
+</head>
+<body>
+  <header class="container">
+    <nav>
+      <ul>
+        <li><strong>Památky</strong></li>
+      </ul>
+      <ul>
+        <li><a href="/">Přehled</a></li>
+        <li><a href="/places">Katalog</a></li>
+        <li><a href="/places/new">Nové místo</a></li>
+      </ul>
+    </nav>
+  </header>
+  <main class="container">
+    {% if notice %}
+    <p class="notice" role="status">{{ notice }}</p>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

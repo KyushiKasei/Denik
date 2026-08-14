@@ -1,0 +1,1 @@
+"""Služby PC aplikace."""

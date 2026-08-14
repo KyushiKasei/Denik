@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Přehled — Památky{% endblock %}
+{% block content %}
+<h1>Přehled katalogu</h1>
+<p>Počty jen nad master katalogem. Návštěvy a deník sem nepatří.</p>
+
+<section class="stats-grid">
+  <article class="stat-card">
+    <a href="/places">
+      <small>Aktivních míst</small>
+      <strong>{{ stats.total_active }}</strong>
+    </a>
+  </article>
+  <article class="stat-card">
+    <a href="/places?quality_status=VERIFIED">
+      <small>Ověřené</small>
+      <strong>{{ stats.verified }}</strong>
+    </a>
+  </article>
+  <article class="stat-card">
+    <a href="/places?quality_status=NEEDS_REVIEW">
+      <small>K revizi</small>
+      <strong>{{ stats.needs_review }}</strong>
+    </a>
+  </article>
+  <article class="stat-card">
+    <a href="/places?missing_gps=1">
+      <small>Bez GPS</small>
+      <strong>{{ stats.missing_gps }}</strong>
+    </a>
+  </article>
+  <article class="stat-card">
+    <a href="/places?missing_type=1">
+      <small>Bez typu</small>
+      <strong>{{ stats.missing_type }}</strong>
+    </a>
+  </article>
+  <article class="stat-card">
+    <a href="/places?archived=archived">
+      <small>Archiv</small>
+      <strong>{{ stats.total_archived }}</strong>
+    </a>
+  </article>
+</section>
+
+<h2>Podle typů</h2>
+<p class="muted">Hradozámek se počítá u hradu i u zámku. Součet typů proto nemusí sedět s počtem míst.</p>
+<section class="stats-grid">
+  {% for item in stats.by_type %}
+  <article class="stat-card">
+    <a href="/places?type={{ item.code }}">
+      <small>{{ item.name_cs }}</small>
+      <strong>{{ item.count }}</strong>
+    </a>
+  </article>
+  {% endfor %}
+</section>
+
+<p class="muted">Databáze: <code>{{ db_path }}</code></p>
+{% endblock %}

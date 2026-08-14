@@ -1,0 +1,55 @@
+{
+  "place_types": [
+    { "code": "CASTLE", "name_cs": "Hrad", "sort_order": 1 },
+    { "code": "CHATEAU", "name_cs": "Zámek", "sort_order": 2 },
+    { "code": "RUIN", "name_cs": "Zřícenina", "sort_order": 3 },
+    { "code": "FORTRESS", "name_cs": "Pevnost", "sort_order": 4 },
+    { "code": "MANOR", "name_cs": "Tvrz", "sort_order": 5 },
+    { "code": "PALACE", "name_cs": "Palác / letohrádek", "sort_order": 6 },
+    { "code": "OTHER", "name_cs": "Jiné", "sort_order": 7 }
+  ],
+  "condition": [
+    { "code": "PRESERVED", "name_cs": "Zachovalý" },
+    { "code": "RUIN", "name_cs": "Zřícenina" },
+    { "code": "REMAINS", "name_cs": "Pozůstatky" },
+    { "code": "REBUILT", "name_cs": "Přestavěný" },
+    { "code": "EXTINCT", "name_cs": "Zaniklý" },
+    { "code": "UNKNOWN", "name_cs": "Neznámý" }
+  ],
+  "visitability": [
+    { "code": "REGULAR", "name_cs": "Běžně přístupné" },
+    { "code": "SEASONAL", "name_cs": "Sezónní" },
+    { "code": "BY_APPOINTMENT", "name_cs": "Po dohodě" },
+    { "code": "EVENTS_ONLY", "name_cs": "Jen při akcích" },
+    { "code": "FREE_ACCESS", "name_cs": "Volný přístup" },
+    { "code": "EXTERIOR_ONLY", "name_cs": "Jen exteriér" },
+    { "code": "PRIVATE", "name_cs": "Soukromé" },
+    { "code": "TEMPORARILY_CLOSED", "name_cs": "Dočasně uzavřené" },
+    { "code": "CLOSED", "name_cs": "Uzavřené" },
+    { "code": "EXTINCT", "name_cs": "Zaniklé" },
+    { "code": "UNKNOWN", "name_cs": "Neznámé" }
+  ],
+  "quality_status": [
+    { "code": "VERIFIED", "name_cs": "Ověřené" },
+    { "code": "PROBABLE", "name_cs": "Pravděpodobné" },
+    { "code": "NEEDS_REVIEW", "name_cs": "K revizi" },
+    { "code": "REJECTED", "name_cs": "Vyřazené" }
+  ],
+  "heritage_status": [
+    { "code": "NONE", "name_cs": "Bez ochrany" },
+    { "code": "KP", "name_cs": "Kulturní památka" },
+    { "code": "NKP", "name_cs": "Národní kulturní památka" },
+    { "code": "UNKNOWN", "name_cs": "Neznámé" }
+  ],
+  "source_types": [
+    { "code": "wikidata", "name_cs": "Wikidata" },
+    { "code": "pamatkovy_katalog", "name_cs": "Památkový katalog" },
+    { "code": "uskp", "name_cs": "ÚSKP" },
+    { "code": "npu", "name_cs": "NPÚ" },
+    { "code": "wikipedia", "name_cs": "Wikipedia" },
+    { "code": "wikimedia_commons", "name_cs": "Wikimedia Commons" },
+    { "code": "osm", "name_cs": "OpenStreetMap" },
+    { "code": "ruian", "name_cs": "RÚIAN" },
+    { "code": "manual", "name_cs": "Ruční zadání" }
+  ]
+}

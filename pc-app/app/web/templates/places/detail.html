@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}{{ place.name }} — Památky{% endblock %}
+{% block content %}
+{% if place.is_archived %}
+<p class="archived-banner">Toto místo je v archivu. Záznam i <code>public_id</code> zůstávají v databázi.</p>
+{% endif %}
+
+<div class="toolbar">
+  <h1>{{ place.name }}</h1>
+  <div class="actions-row">
+    <a href="/places/{{ place.public_id }}/edit" role="button">Upravit</a>
+    {% if place.is_archived %}
+    <form method="post" action="/places/{{ place.public_id }}/restore">
+      <button type="submit" class="secondary">Obnovit z archivu</button>
+    </form>
+    {% else %}
+    <form method="post" action="/places/{{ place.public_id }}/archive"
+          onsubmit="return confirm('Archivovat toto místo? Záznam zůstane v databázi včetně public_id.');">
+      <button type="submit" class="secondary">Archivovat</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+<p class="public-id">Interní ID (neměnné): <code>{{ place.public_id }}</code></p>
+
+{% if place.short_name %}
+<p>Krátký název: {{ place.short_name }}</p>
+{% endif %}
+
+{% if place.alt_names %}
+<p>Další názvy: {{ place.alt_names | join(", ") }}</p>
+{% endif %}
+
+{% if place.short_description %}
+<p>{{ place.short_description }}</p>
+{% endif %}
+
+<h2>Zařazení</h2>
+<dl class="detail-grid">
+  <dt>Typy</dt>
+  <dd>{{ place.types_cs }}</dd>
+  <dt>Stav objektu</dt>
+  <dd>{{ enum_label("condition", place.condition) }}</dd>
+  <dt>Přístupnost</dt>
+  <dd>{{ enum_label("visitability", place.visitability) }}</dd>
+  <dt>Kvalita dat</dt>
+  <dd>{{ enum_label("quality_status", place.quality_status) }}</dd>
+  <dt>Památková ochrana</dt>
+  <dd>{{ enum_label("heritage_status", place.heritage_status) }}</dd>
+  <dt>UNESCO</dt>
+  <dd>{% if place.unesco %}ano{% else %}ne{% endif %}</dd>
+</dl>
+
+<h2>Lokalita</h2>
+<dl class="detail-grid">
+  <dt>Souřadnice</dt>
+  <dd>
+    {% if place.has_gps %}
+      {{ place.latitude }}, {{ place.longitude }}
+      · <a href="https://mapy.cz/zakladni?q={{ place.latitude }},{{ place.longitude }}" target="_blank" rel="noopener">Mapy.cz</a>
+      · <a href="https://www.google.com/maps?q={{ place.latitude }},{{ place.longitude }}" target="_blank" rel="noopener">Google Maps</a>
+    {% else %}
+      chybí
+    {% endif %}
+  </dd>
+  <dt>Adresa</dt>
+  <dd>{{ place.address or "—" }}</dd>
+  <dt>Obec</dt>
+  <dd>{{ place.municipality or "—" }}{% if place.municipality_code %} <span class="muted">({{ place.municipality_code }})</span>{% endif %}</dd>
+  <dt>Okres</dt>
+  <dd>{{ place.district or "—" }}{% if place.district_code %} <span class="muted">({{ place.district_code }})</span>{% endif %}</dd>
+  <dt>Kraj</dt>
+  <dd>{{ place.region or "—" }}{% if place.region_code %} <span class="muted">({{ place.region_code }})</span>{% endif %}</dd>
+  <dt>Země</dt>
+  <dd>{{ place.country }}</dd>
+</dl>
+
+<h2>Odkazy</h2>
+<dl class="detail-grid">
+  <dt>Oficiální web</dt>
+  <dd>{% if place.official_website %}<a href="{{ place.official_website }}" target="_blank" rel="noopener">{{ place.official_website }}</a>{% else %}—{% endif %}</dd>
+  <dt>Wikipedia</dt>
+  <dd>{% if place.wikipedia_url %}<a href="{{ place.wikipedia_url }}" target="_blank" rel="noopener">{{ place.wikipedia_url }}</a>{% else %}—{% endif %}</dd>
+  <dt>Otevírací doba</dt>
+  <dd>{% if place.opening_hours_url %}<a href="{{ place.opening_hours_url }}" target="_blank" rel="noopener">{{ place.opening_hours_url }}</a>{% else %}—{% endif %}</dd>
+  <dt>Vstupenky</dt>
+  <dd>{% if place.ticket_url %}<a href="{{ place.ticket_url }}" target="_blank" rel="noopener">{{ place.ticket_url }}</a>{% else %}—{% endif %}</dd>
+</dl>
+
+<p class="muted">Vytvořeno {{ place.created_at }} · Upraveno {{ place.updated_at }}{% if place.archived_at %} · Archivováno {{ place.archived_at }}{% endif %}</p>
+<p><a href="/places">← Zpět do katalogu</a></p>
+{% endblock %}
