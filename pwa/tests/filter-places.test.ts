@@ -60,6 +60,11 @@ test("hledání ignoruje diakritiku", () => {
   expect(found.map((place) => place.name)).toEqual(["Bečov"]);
 });
 
+test("hledání do dvou písmen ještě nefiltruje", () => {
+  const found = filterPlaces([bouzov, becov], { query: "be", type: "", region: "", district: "", journal: "" });
+  expect(found).toHaveLength(2);
+});
+
 test("filtr typu a kraje", () => {
   const found = filterPlaces([bouzov, becov], {
     query: "",

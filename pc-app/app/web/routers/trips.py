@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 from starlette.status import HTTP_303_SEE_OTHER, HTTP_404_NOT_FOUND
 
@@ -92,14 +92,17 @@ def trip_detail(request: Request, public_id: str, session: Session = Depends(db_
     suggestions: list[Place] = []
     if q:
         term = f"%{q}%"
-        suggestions = list(
-            session.scalars(
-                select(Place)
-                .where(Place.archived_at.is_(None), Place.name.ilike(term))
-                .order_by(Place.name.asc())
-                .limit(12)
-            ).all()
+        already = {stop.place_public_id for stop in trip.stops}
+        stmt = (
+            select(Place)
+            .where(Place.archived_at.is_(None))
+            .where(or_(Place.name.ilike(term), Place.municipality.ilike(term), Place.alternative_names.ilike(term)))
+            .order_by(Place.name.asc())
+            .limit(20)
         )
+        if already:
+            stmt = stmt.where(Place.public_id.notin_(already))
+        suggestions = list(session.scalars(stmt).all())[:12]
     stops = sorted(trip.stops, key=lambda item: item.sort_order)
     return templates.TemplateResponse(
         request,

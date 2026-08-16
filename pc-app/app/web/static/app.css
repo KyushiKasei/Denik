@@ -494,3 +494,96 @@ dl.detail-grid dd {
 .visit-form button[type="submit"] {
   margin-top: 0.25rem;
 }
+
+.trip-meta-form button[type="submit"] {
+  width: auto;
+}
+
+.trip-search {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 0.75rem;
+  align-items: end;
+  margin-bottom: 0.75rem;
+}
+
+.trip-search label {
+  flex: 1 1 16rem;
+  margin: 0;
+}
+
+.trip-search button {
+  width: auto;
+  margin: 0;
+}
+
+.trip-list {
+  list-style: none;
+  margin: 0 0 1.25rem;
+  padding: 0;
+}
+
+ol.trip-list {
+  list-style: decimal;
+  padding-left: 1.4rem;
+}
+
+.trip-list > li {
+  margin: 0;
+}
+
+.trip-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--pamatky-line);
+}
+
+.trip-row-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.trip-row-main a,
+.trip-row-main code {
+  font-weight: 600;
+}
+
+.trip-row-meta {
+  margin: 0.15rem 0 0;
+  color: var(--pamatky-muted);
+  font-size: 0.9rem;
+}
+
+.trip-row-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.35rem;
+  align-items: center;
+  margin: 0;
+}
+
+.trip-row-actions button,
+.trip-attach button {
+  width: auto;
+  margin: 0;
+  padding: 0.35rem 0.75rem;
+}
+
+.trip-gap {
+  margin: 0.15rem 0 0.35rem;
+}
+
+.trip-attach {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 0.75rem;
+  align-items: end;
+}
+
+.trip-attach label {
+  flex: 1 1 16rem;
+  margin: 0;
+}

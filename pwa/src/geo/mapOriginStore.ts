@@ -15,14 +15,7 @@ export interface StoredMapView {
 const ORIGIN_SOURCES: GeoOrigin["source"][] = ["coords", "place", "municipality", "nominatim", "gps"];
 
 export function urlHasCoords(params: URLSearchParams): boolean {
-  const latRaw = params.get("lat");
-  const lonRaw = params.get("lon");
-  if (!latRaw || !lonRaw) {
-    return false;
-  }
-  const lat = Number(latRaw);
-  const lon = Number(lonRaw);
-  return Number.isFinite(lat) && Number.isFinite(lon);
+  return originFromUrlParams(params.get("lat"), params.get("lon"), null) != null;
 }
 
 export function urlHasRadius(params: URLSearchParams): boolean {
@@ -38,7 +31,28 @@ export function formatGpsAccuracy(meters: number | null | undefined): string | n
 }
 
 function isValidCoord(lat: number, lon: number): boolean {
-  return Number.isFinite(lat) && Number.isFinite(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+    return false;
+  }
+  // 0,0 je Number(null) z prázdné URL, ne reálný střed mapy v ČR.
+  return !(lat === 0 && lon === 0);
+}
+
+export function originFromUrlParams(
+  latRaw: string | null,
+  lonRaw: string | null,
+  labelRaw: string | null,
+): GeoOrigin | null {
+  if (latRaw == null || lonRaw == null || latRaw === "" || lonRaw === "") {
+    return null;
+  }
+  const latitude = Number(latRaw);
+  const longitude = Number(lonRaw);
+  if (!isValidCoord(latitude, longitude)) {
+    return null;
+  }
+  const label = (labelRaw || "").trim() || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+  return { latitude, longitude, label, source: "coords" };
 }
 
 export function parseStoredMapView(raw: string | null): StoredMapView | null {

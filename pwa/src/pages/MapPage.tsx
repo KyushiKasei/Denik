@@ -31,12 +31,14 @@ import { clampRadiusKm, DEFAULT_RADIUS_KM, haversineKm, MAX_RADIUS_KM, MIN_RADIU
 import {
   formatGpsAccuracy,
   loadStoredMapView,
+  originFromUrlParams,
   saveStoredMapView,
   urlHasCoords,
   urlHasRadius,
 } from "../geo/mapOriginStore";
 import { placesNearby } from "../geo/nearby";
 import { geocodeNominatim, resolveOriginFromCatalog, suggestOrigins, type GeoOrigin } from "../geo/origin";
+import { SEARCH_DEBOUNCE_MS } from "../text/fold";
 import { mapTileStatus, mapTileStatusLabel } from "../geo/tileStatus";
 import type { LiveGpsPosition } from "../components/NearbyMap";
 
@@ -86,6 +88,7 @@ export function MapPage() {
   const { visitedIds, wantIds, favIds } = useDiaryBadges();
   const [origin, setOrigin] = useState<GeoOrigin | null>(null);
   const [query, setQuery] = useState(filters.query);
+  const [suggestQuery, setSuggestQuery] = useState(filters.query);
   const [gpsError, setGpsError] = useState<string | null>(null);
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -142,17 +145,12 @@ export function MapPage() {
   }, []);
 
   useEffect(() => {
-    const lat = Number(latParam);
-    const lon = Number(lonParam);
-    if (Number.isFinite(lat) && Number.isFinite(lon)) {
-      setOrigin({
-        latitude: lat,
-        longitude: lon,
-        label: labelParam || `${lat.toFixed(5)}, ${lon.toFixed(5)}`,
-        source: "coords",
-      });
-      setLookupError(null);
+    const next = originFromUrlParams(latParam, lonParam, labelParam);
+    if (!next) {
+      return;
     }
+    setOrigin(next);
+    setLookupError(null);
   }, [latParam, lonParam, labelParam]);
 
   useEffect(() => {
@@ -189,7 +187,12 @@ export function MapPage() {
     return uniqueSorted(source.map((place) => place.location.district));
   }, [places, filters.region]);
 
-  const suggestions = useMemo(() => suggestOrigins(places ?? [], query), [places, query]);
+  useEffect(() => {
+    const handle = window.setTimeout(() => setSuggestQuery(query), SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(handle);
+  }, [query]);
+
+  const suggestions = useMemo(() => suggestOrigins(places ?? [], suggestQuery), [places, suggestQuery]);
   const nearby = useMemo(() => {
     if (!origin || !places) {
       return { hits: [], skippedNoGps: 0 };
@@ -358,7 +361,7 @@ export function MapPage() {
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Obec nebo název…"
+            placeholder="Obec nebo název (od 3 písmen)…"
             autoComplete="off"
           />
         </label>
@@ -373,7 +376,7 @@ export function MapPage() {
             {busy ? "Hledám…" : "Hledat"}
           </button>
         </div>
-        {suggestions.length > 0 && query.trim().length >= 2 ? (
+        {suggestions.length > 0 ? (
           <ul className="nearby-suggest">
             {suggestions.map((item) => (
               <li key={`${item.label}-${item.latitude}`}>

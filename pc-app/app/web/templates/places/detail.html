@@ -98,6 +98,26 @@
 
 <p class="muted">Vytvořeno {{ place.created_at }} · Upraveno {{ place.updated_at }}{% if place.archived_at %} · Archivováno {{ place.archived_at }}{% endif %}</p>
 
+<section class="journal" id="vylet">
+  <h2>Přidat na výlet</h2>
+  {% if place.is_archived %}
+  <p class="muted">Archivované místo na výlet nepřidávejte.</p>
+  {% elif upcoming_trips %}
+  <form method="post" action="/places/{{ place.public_id }}/trips" class="trip-attach">
+    <label>Plánovaný výlet
+      <select name="trip_public_id" required>
+        {% for trip in upcoming_trips %}
+        <option value="{{ trip.public_id }}">{{ trip.name }}{% if trip.planned_on %} ({{ trip.planned_on }}){% else %} (bez data){% endif %}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit">Přidat na výlet</button>
+  </form>
+  {% else %}
+  <p class="muted">Žádný plánovaný výlet, kam by šlo místo přidat. <a href="/trips">Založit výlet</a></p>
+  {% endif %}
+</section>
+
 <section class="journal" id="denik">
   <h2>Můj deník</h2>
   <form method="post" action="/places/{{ place.public_id }}/journal">

@@ -33,9 +33,9 @@ import { extraFilterCount, FilterDisclosure } from "../components/FilterDisclosu
 import { JournalChips } from "../components/JournalChips";
 import { OrphanVisits } from "../components/OrphanVisits";
 import { useDiaryBadges } from "../diary/useDiaryBadges";
+import { appliedSearchQuery, SEARCH_DEBOUNCE_MS } from "../text/fold";
 
 const PAGE_SIZE = 80;
-const SEARCH_DEBOUNCE_MS = 300;
 
 function knownVisitability(value: string): value is Exclude<VisitabilityFilter, ""> {
   return (
@@ -136,7 +136,6 @@ export function CatalogPage() {
     filters.heritage,
     filters.gps,
     filters.sort,
-    queryDraft,
   ]);
 
   useEffect(() => {
@@ -144,17 +143,16 @@ export function CatalogPage() {
   }, [filters.query]);
 
   useEffect(() => {
-    if (queryDraft === filters.query) {
+    const nextQuery = appliedSearchQuery(queryDraft);
+    if (nextQuery === filters.query) {
       return;
     }
     const handle = window.setTimeout(() => {
-      const next = { ...filtersFromParams(searchParams), query: queryDraft };
+      const next = { ...filtersFromParams(searchParams), query: nextQuery };
       setSearchParams(paramsFromFilters(next), { replace: true });
     }, SEARCH_DEBOUNCE_MS);
     return () => window.clearTimeout(handle);
   }, [queryDraft, filters.query, searchParams, setSearchParams]);
-
-  const liveFilters = useMemo(() => ({ ...filters, query: queryDraft }), [filters, queryDraft]);
 
   const regions = useMemo(() => uniqueSorted((places ?? []).map((place) => place.location.region)), [places]);
   const districts = useMemo(() => {
@@ -163,12 +161,12 @@ export function CatalogPage() {
   }, [places, filters.region]);
 
   const filtered = useMemo(
-    () => filterPlaces(places ?? [], liveFilters, { visitedIds, wantIds, favIds }),
-    [places, liveFilters, visitedIds, wantIds, favIds],
+    () => filterPlaces(places ?? [], filters, { visitedIds, wantIds, favIds }),
+    [places, filters, visitedIds, wantIds, favIds],
   );
   const facets = useMemo(
-    () => facetCounts(places ?? [], liveFilters, { visitedIds, wantIds, favIds }),
-    [places, liveFilters, visitedIds, wantIds, favIds],
+    () => facetCounts(places ?? [], filters, { visitedIds, wantIds, favIds }),
+    [places, filters, visitedIds, wantIds, favIds],
   );
   const visible = filtered.slice(0, limit);
 
@@ -265,7 +263,7 @@ export function CatalogPage() {
             type="search"
             value={queryDraft}
             onChange={(event) => setQueryDraft(event.target.value)}
-            placeholder="Název, obec…"
+            placeholder="Název, obec (od 3 písmen)…"
             autoComplete="off"
           />
         </label>

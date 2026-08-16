@@ -65,7 +65,7 @@ export default defineConfig({
         runtimeCaching: [
           {
             /* Jen naposledy prohlížené OSM dlaždice — ne balíček celé ČR. ~800 × 20–40 kB ≈ desítky MB. */
-            urlPattern: /^https:\/\/[a-z]+\.tile\.openstreetmap\.org\/.*/i,
+            urlPattern: /^https:\/\/([a-z]+\.)?tile\.openstreetmap\.org\/.*/i,
             handler: "CacheFirst",
             options: {
               cacheName: "osm-tiles",

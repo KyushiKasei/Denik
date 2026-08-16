@@ -5,6 +5,7 @@ import "leaflet/dist/leaflet.css";
 import { Link } from "react-router-dom";
 import type { NearbyHit } from "../geo/nearby";
 import type { GeoOrigin } from "../geo/origin";
+import { OSM_TILE_ATTRIBUTION, OSM_TILE_URL } from "../geo/tileStatus";
 import "../map/leafletIcon";
 
 export interface LiveGpsPosition {
@@ -16,9 +17,14 @@ export interface LiveGpsPosition {
 function FitView({ origin, radiusKm }: { origin: GeoOrigin; radiusKm: number }) {
   const map = useMap();
   useEffect(() => {
-    const circle = L.circle([origin.latitude, origin.longitude], { radius: radiusKm * 1000 });
-    map.fitBounds(circle.getBounds(), { padding: [20, 20] });
-    const timer = window.setTimeout(() => map.invalidateSize(), 80);
+    // getBounds() u kruhu mimo mapu padá (layerPointToLatLng na undefined) a shodí celou stránku.
+    const bounds = L.latLng(origin.latitude, origin.longitude).toBounds(radiusKm * 1000);
+    const layout = () => {
+      map.invalidateSize();
+      map.fitBounds(bounds, { padding: [20, 20], maxZoom: 14 });
+    };
+    layout();
+    const timer = window.setTimeout(layout, 80);
     return () => window.clearTimeout(timer);
   }, [map, origin.latitude, origin.longitude, radiusKm]);
   return null;
@@ -78,8 +84,9 @@ export function NearbyMap({
         className="nearby-map-canvas"
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution={OSM_TILE_ATTRIBUTION}
+          url={OSM_TILE_URL}
+          maxZoom={19}
           eventHandlers={{
             tileerror: () => onTileErrorRef.current?.(),
           }}

@@ -53,6 +53,7 @@ a {
   left: 0;
   right: 0;
   bottom: 0;
+  z-index: 20;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   background: var(--paper);
@@ -388,13 +389,20 @@ button:disabled {
 
 .place-map {
   height: 14rem;
+  width: 100%;
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
   border-radius: var(--radius);
   overflow: hidden;
   border: 1px solid var(--line);
+  background: #d5ddd5;
 }
 
-.place-map-canvas {
+.place-map-canvas,
+.place-map .leaflet-container {
   height: 100%;
+  min-height: 14rem;
   width: 100%;
 }
 
@@ -626,19 +634,41 @@ code {
 .nearby-map {
   height: min(55dvh, calc(100dvh - var(--tab-h) - 11rem));
   min-height: 18rem;
+  width: 100%;
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
   border-radius: var(--radius);
   overflow: hidden;
   border: 1px solid var(--line);
   margin-bottom: 1rem;
+  background: #d5ddd5;
 }
 
-.nearby-map-canvas {
+.nearby-map-canvas,
+.nearby-map .leaflet-container {
   height: 100%;
+  min-height: 18rem;
   width: 100%;
 }
 
-.nearby-map img {
-  max-width: none;
+/* Leaflet 1.9 plus-lighter + color-scheme dělá šedou mapu (stejná oprava jako PC). */
+.nearby-map img,
+.nearby-map .leaflet-tile,
+.nearby-map .leaflet-marker-icon,
+.nearby-map .leaflet-marker-shadow,
+.place-map img,
+.place-map .leaflet-tile,
+.place-map .leaflet-marker-icon,
+.place-map .leaflet-marker-shadow {
+  max-width: none !important;
+  max-height: none !important;
+  height: unset;
+}
+
+.nearby-map .leaflet-container img.leaflet-tile,
+.place-map .leaflet-container img.leaflet-tile {
+  mix-blend-mode: normal !important;
 }
 
 .nearby-controls .nearby-suggest {
@@ -697,6 +727,11 @@ code {
 
 .badge-list {
   list-style: none;
+  margin: 0 0 0.4rem;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
 }
 
 .trip-stops {
@@ -718,12 +753,6 @@ button.place-row {
   color: inherit;
   border: 0;
   border-radius: 0;
-}
-  margin: 0 0 0.4rem;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
 }
 
 .badge {

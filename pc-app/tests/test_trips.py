@@ -67,6 +67,9 @@ def test_trips_crud_add_reorder_and_air_km(client) -> None:
     assert "Bouzov" in detail.text
     assert "Karlštejn" in detail.text
     assert "km vzdušnou čarou" in detail.text
+    assert "Hrad" in detail.text
+    assert "Běžně přístupné" in detail.text
+    assert 'class="trip-row"' in detail.text
 
     client.post(f"/trips/{trip_id}/stops/{bouzov}/down", follow_redirects=False)
     after_move = client.get(f"/trips/{trip_id}").text
@@ -144,3 +147,63 @@ def test_diary_import_export_trips_roundtrip(client) -> None:
     assert data["schema_version"] == 2
     assert data["trips"][0]["id"] == trip_id
     assert data["trips"][0]["stops"][0]["place_id"] == public_id
+
+
+def test_trip_search_shows_type_and_compact_add(client) -> None:
+    trip_id = client.post(
+        "/trips",
+        data={"name": "Výlet", "planned_on": "2099-06-01"},
+        follow_redirects=False,
+    ).headers["location"].split("/")[2].split("?")[0]
+    _create_place(client, "Kovozoo Staré Město")
+
+    page = client.get(f"/trips/{trip_id}?q=zoo")
+    assert page.status_code == 200
+    assert "Kovozoo Staré Město" in page.text
+    assert "Hrad" in page.text
+    assert "Běžně přístupné" in page.text
+    html = page.text
+    name_at = html.find("Kovozoo Staré Město")
+    add_at = html.find(">Přidat<", name_at)
+    assert 0 <= name_at < add_at
+    assert 'class="trip-row"' in html
+
+
+def test_place_detail_adds_only_to_upcoming_trip(client) -> None:
+    place_id = _create_place(client, "Bouzov")
+    past = client.post(
+        "/trips",
+        data={"name": "Minulý", "planned_on": "2000-01-01"},
+        follow_redirects=False,
+    ).headers["location"].split("/")[2].split("?")[0]
+    future = client.post(
+        "/trips",
+        data={"name": "Budoucí", "planned_on": "2099-06-01"},
+        follow_redirects=False,
+    ).headers["location"].split("/")[2].split("?")[0]
+
+    detail = client.get(f"/places/{place_id}")
+    assert "Přidat na výlet" in detail.text
+    assert "Budoucí" in detail.text
+    assert "Minulý" not in detail.text
+    assert f'value="{future}"' in detail.text
+    assert f'value="{past}"' not in detail.text
+
+    added = client.post(
+        f"/places/{place_id}/trips",
+        data={"trip_public_id": future},
+        follow_redirects=False,
+    )
+    assert added.status_code == 303
+    assert added.headers["location"] == f"/places/{place_id}?notice=trip_stop_added"
+    trip_page = client.get(f"/trips/{future}")
+    assert "Bouzov" in trip_page.text
+
+    ignored = client.post(
+        f"/places/{place_id}/trips",
+        data={"trip_public_id": past},
+        follow_redirects=False,
+    )
+    assert ignored.status_code == 303
+    past_page = client.get(f"/trips/{past}")
+    assert "Bouzov" not in past_page.text

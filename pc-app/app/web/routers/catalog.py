@@ -13,6 +13,7 @@ from app.db.models import Place
 from app.services.backup import list_backups
 from app.deps import db_session
 from app.services.catalog_export import catalog_export_status, export_catalog
+from app.services.trips import add_stop, get_trip, list_upcoming_trips, trips_accepting_place
 from app.services.diary_io import (
     VisitInputError,
     VisitFilters,
@@ -76,6 +77,7 @@ NOTICES = {
     "visit_updated": "Návštěva je upravená.",
     "visit_deleted": "Návštěva je smazaná. Záznam zůstává v deníku a přenese se při exportu.",
     "journal_saved": "Osobní stav deníku je uložený.",
+    "trip_stop_added": "Místo je na výletu.",
 }
 
 
@@ -357,6 +359,7 @@ def _place_detail_context(
         "notice": _notice(request),
         "visit_form": form or _empty_visit_form(),
         "editing_visit_id": edit_id,
+        "upcoming_trips": trips_accepting_place(session, place),
         **form_context(),
     }
 
@@ -506,6 +509,22 @@ async def places_save_journal(
         personal_note=str(form.get("personal_note") or ""),
     )
     return RedirectResponse(f"/places/{public_id}?notice=journal_saved", status_code=HTTP_303_SEE_OTHER)
+
+
+@router.post("/places/{public_id}/trips")
+async def places_add_to_trip(
+    request: Request, public_id: str, session: Session = Depends(db_session)
+) -> RedirectResponse:
+    place = get_place_by_public_id(session, public_id)
+    if place is None:
+        return RedirectResponse("/places", status_code=HTTP_303_SEE_OTHER)
+    form = await request.form()
+    trip = get_trip(session, str(form.get("trip_public_id") or "").strip())
+    allowed = {item.public_id for item in list_upcoming_trips(session)}
+    if trip is None or trip.is_deleted or trip.public_id not in allowed:
+        return RedirectResponse(f"/places/{public_id}", status_code=HTTP_303_SEE_OTHER)
+    add_stop(session, trip, place)
+    return RedirectResponse(f"/places/{public_id}?notice=trip_stop_added", status_code=HTTP_303_SEE_OTHER)
 
 
 @router.get("/places/{public_id}/edit", response_class=HTMLResponse)

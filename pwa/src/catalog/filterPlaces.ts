@@ -1,6 +1,6 @@
 import type { CatalogPlace, PlaceTypeCode, VisitabilityCode } from "./types";
 import { hasGps, HERITAGE_OPTIONS, VISITABILITY_FILTER_GROUPS, visitabilityMatches } from "./labels";
-import { fold } from "../text/fold";
+import { appliedSearchQuery, fold } from "../text/fold";
 
 export type VisitabilityFilter = VisitabilityCode | "PUBLIC" | "NOT_PUBLIC" | "";
 export type JournalFilter = "" | "visited" | "not_visited" | "want_to_visit" | "favorite";
@@ -129,7 +129,7 @@ export function filterPlaces(
   filters: PlaceFilters,
   diary?: DiaryFilterSets,
 ): CatalogPlace[] {
-  const needle = fold(filters.query.trim());
+  const needle = fold(appliedSearchQuery(filters.query));
   const matched = places.filter((place) => {
       if (filters.type && !place.types.includes(filters.type)) {
         return false;

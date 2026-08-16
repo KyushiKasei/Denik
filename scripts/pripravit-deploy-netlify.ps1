@@ -24,12 +24,37 @@ if (-not (Test-Path $Dist)) {
     throw "Build nevytvoril slozku pwa/dist."
 }
 
+function Invoke-WithRetry {
+    param(
+        [scriptblock]$Action,
+        [string]$Label,
+        [int]$Attempts = 8
+    )
+    for ($i = 1; $i -le $Attempts; $i++) {
+        try {
+            & $Action
+            return
+        } catch {
+            if ($i -eq $Attempts) { throw }
+            Write-Host "${Label}: soubor je zamceny (casto Dropbox), pokus $i/$Attempts ..."
+            Start-Sleep -Seconds (2 * $i)
+        }
+    }
+}
+
 New-Item -ItemType Directory -Force -Path $Dest | Out-Null
 Get-ChildItem -Path $Dest -Force | Where-Object {
     $_.Name -notin @("README.md", ".gitkeep")
-} | Remove-Item -Recurse -Force
+} | ForEach-Object {
+    $item = $_
+    Invoke-WithRetry -Label "Cistim $($item.Name)" -Action {
+        Remove-Item -LiteralPath $item.FullName -Recurse -Force
+    }
+}
 
-Copy-Item -Path (Join-Path $Dist "*") -Destination $Dest -Recurse -Force
+Invoke-WithRetry -Label "Kopiruji dist" -Action {
+    Copy-Item -Path (Join-Path $Dist "*") -Destination $Dest -Recurse -Force
+}
 
 $forbidden = Get-ChildItem -Path $Dest -Recurse -File | Where-Object {
     $_.Name -in @("catalog.json", "diary.json", "catalog.sample.json", "diary.sample.json")

@@ -4,6 +4,7 @@ import {
   formatGpsAccuracy,
   loadStoredMapView,
   MAP_LAST_ORIGIN_KEY,
+  originFromUrlParams,
   parseStoredMapView,
   saveStoredMapView,
   urlHasCoords,
@@ -15,6 +16,19 @@ test("urlHasCoords vyžaduje obě souřadnice", () => {
   expect(urlHasCoords(new URLSearchParams("lat=49.7"))).toBe(false);
   expect(urlHasCoords(new URLSearchParams("q=Bouzov"))).toBe(false);
   expect(urlHasCoords(new URLSearchParams("lat=foo&lon=1"))).toBe(false);
+  expect(urlHasCoords(new URLSearchParams("lat=0&lon=0"))).toBe(false);
+});
+
+test("originFromUrlParams neplete Number(null) s GPS 0,0", () => {
+  expect(originFromUrlParams(null, null, null)).toBeNull();
+  expect(originFromUrlParams("", "", null)).toBeNull();
+  expect(originFromUrlParams("0", "0", "nula")).toBeNull();
+  expect(originFromUrlParams("49.704", "16.891", " Bouzov ")).toEqual({
+    latitude: 49.704,
+    longitude: 16.891,
+    label: "Bouzov",
+    source: "coords",
+  });
 });
 
 test("urlHasRadius pozná slider v URL", () => {
@@ -26,6 +40,7 @@ test("parseStoredMapView odmítne neplatné souřadnice", () => {
   expect(parseStoredMapView(null)).toBeNull();
   expect(parseStoredMapView("{")).toBeNull();
   expect(parseStoredMapView(JSON.stringify({ latitude: 99, longitude: 16 }))).toBeNull();
+  expect(parseStoredMapView(JSON.stringify({ latitude: 0, longitude: 0, label: "0.00000, 0.00000" }))).toBeNull();
   const ok = parseStoredMapView(
     JSON.stringify({ latitude: 49.704, longitude: 16.891, label: "Bouzov", source: "place", radiusKm: 3 }),
   );

@@ -1,6 +1,6 @@
 import type { CatalogPlace } from "../catalog/types";
 import { hasGps } from "../catalog/labels";
-import { fold } from "../text/fold";
+import { appliedSearchQuery, fold } from "../text/fold";
 
 export const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
 
@@ -12,8 +12,8 @@ export interface GeoOrigin {
 }
 
 export function suggestOrigins(places: CatalogPlace[], q: string, limit = 8): GeoOrigin[] {
-  const term = fold(q.trim());
-  if (term.length < 2) {
+  const term = fold(appliedSearchQuery(q));
+  if (!term) {
     return [];
   }
   const out: GeoOrigin[] = [];

@@ -117,4 +117,5 @@ test("origin from catalog name and municipality", () => {
   expect(resolveOriginFromCatalog([bouzov], "Bouzov")?.source).toBe("place");
   expect(resolveOriginFromCatalog([bouzov], "bouzov")?.latitude).toBe(49.704);
   expect(suggestOrigins([bouzov], "Bou").map((item) => item.label)).toEqual(["Bouzov"]);
+  expect(suggestOrigins([bouzov], "Bo")).toEqual([]);
 });

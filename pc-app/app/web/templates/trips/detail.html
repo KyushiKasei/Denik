@@ -10,47 +10,57 @@
   </form>
 </div>
 
-<form method="post" action="/trips/{{ trip.public_id }}">
-  <label>Název
-    <input type="text" name="name" value="{{ trip.name }}" required>
-  </label>
-  <label>Datum
-    <input type="date" name="planned_on" value="{{ trip.planned_on or '' }}">
-  </label>
+<form method="post" action="/trips/{{ trip.public_id }}" class="trip-meta-form">
+  <div class="grid">
+    <label>Název
+      <input type="text" name="name" value="{{ trip.name }}" required>
+    </label>
+    <label>Datum
+      <input type="date" name="planned_on" value="{{ trip.planned_on or '' }}">
+    </label>
+  </div>
   <label>Poznámka
-    <textarea name="notes" rows="3">{{ trip.notes or "" }}</textarea>
+    <textarea name="notes" rows="2">{{ trip.notes or "" }}</textarea>
   </label>
   <button type="submit">Uložit výlet</button>
 </form>
 
 <h2>Zastávky</h2>
 {% if stops %}
-<ol>
+<ol class="trip-list">
   {% for stop in stops %}
   <li>
-    {% if stop.place %}
-    <a href="/places/{{ stop.place.public_id }}">{{ stop.place.name }}</a>
-    <span class="muted">{{ stop.place.municipality or "" }}</span>
-    {% else %}
-    <code>{{ stop.place_public_id }}</code>
-    <span class="muted">mimo katalog</span>
-    {% endif %}
-    <span class="actions-row">
-      <form method="post" action="/trips/{{ trip.public_id }}/stops/{{ stop.place_public_id }}/up">
-        <button type="submit" class="secondary" {% if loop.first %}disabled{% endif %}>↑</button>
-      </form>
-      <form method="post" action="/trips/{{ trip.public_id }}/stops/{{ stop.place_public_id }}/down">
-        <button type="submit" class="secondary" {% if loop.last %}disabled{% endif %}>↓</button>
-      </form>
-      <form method="post" action="/trips/{{ trip.public_id }}/stops/{{ stop.place_public_id }}/delete">
-        <button type="submit" class="secondary">Odebrat</button>
-      </form>
-    </span>
+    <div class="trip-row">
+      <div class="trip-row-main">
+        {% if stop.place %}
+        <a href="/places/{{ stop.place.public_id }}">{{ stop.place.name }}</a>
+        <p class="trip-row-meta">
+          {{ stop.place.types_cs or "bez typu" }}
+          · {{ enum_label("visitability", stop.place.visitability) }}
+          {% if stop.place.municipality %} · {{ stop.place.municipality }}{% endif %}
+        </p>
+        {% else %}
+        <code>{{ stop.place_public_id }}</code>
+        <p class="trip-row-meta">mimo katalog</p>
+        {% endif %}
+      </div>
+      <div class="actions-row trip-row-actions">
+        <form method="post" action="/trips/{{ trip.public_id }}/stops/{{ stop.place_public_id }}/up">
+          <button type="submit" class="secondary" {% if loop.first %}disabled{% endif %}>↑</button>
+        </form>
+        <form method="post" action="/trips/{{ trip.public_id }}/stops/{{ stop.place_public_id }}/down">
+          <button type="submit" class="secondary" {% if loop.last %}disabled{% endif %}>↓</button>
+        </form>
+        <form method="post" action="/trips/{{ trip.public_id }}/stops/{{ stop.place_public_id }}/delete">
+          <button type="submit" class="secondary">Odebrat</button>
+        </form>
+      </div>
+    </div>
     {% if not loop.last %}
-    <p class="muted">
-      {% set gap = gaps[loop.index0] %}
-      {% if gap is not none %}↓ {{ "%.1f"|format(gap) }} km vzdušnou čarou{% endif %}
-    </p>
+    {% set gap = gaps[loop.index0] %}
+    {% if gap is not none %}
+    <p class="muted trip-gap">↓ {{ "%.1f"|format(gap) }} km vzdušnou čarou</p>
+    {% endif %}
     {% endif %}
   </li>
   {% endfor %}
@@ -60,26 +70,34 @@
 {% endif %}
 
 <h2>Přidat místo</h2>
-<form method="get" action="/trips/{{ trip.public_id }}" class="filters">
-  <label class="span-2">Hledání
-    <input type="search" name="q" value="{{ q }}" placeholder="Název místa…">
+<form method="get" action="/trips/{{ trip.public_id }}" class="trip-search">
+  <label>Hledání
+    <input type="search" name="q" value="{{ q }}" placeholder="Název, obec…">
   </label>
   <button type="submit" class="secondary">Hledat</button>
 </form>
 {% if suggestions %}
-<ul>
+<ul class="trip-list trip-picks">
   {% for place in suggestions %}
   <li>
-    {{ place.name }}
-    <span class="muted">{{ place.municipality or "" }}</span>
-    <form method="post" action="/trips/{{ trip.public_id }}/stops" style="display:inline">
-      <input type="hidden" name="place_public_id" value="{{ place.public_id }}">
-      <button type="submit" class="secondary">Přidat</button>
-    </form>
+    <div class="trip-row">
+      <div class="trip-row-main">
+        <a href="/places/{{ place.public_id }}">{{ place.name }}</a>
+        <p class="trip-row-meta">
+          {{ place.types_cs or "bez typu" }}
+          · {{ enum_label("visitability", place.visitability) }}
+          {% if place.municipality %} · {{ place.municipality }}{% endif %}
+        </p>
+      </div>
+      <form method="post" action="/trips/{{ trip.public_id }}/stops" class="trip-row-actions">
+        <input type="hidden" name="place_public_id" value="{{ place.public_id }}">
+        <button type="submit">Přidat</button>
+      </form>
+    </div>
   </li>
   {% endfor %}
 </ul>
 {% elif q %}
-<p class="muted">Nic se nenašlo.</p>
+<p class="muted">Nic se nenašlo, nebo už je místo na tomto výletu.</p>
 {% endif %}
 {% endblock %}

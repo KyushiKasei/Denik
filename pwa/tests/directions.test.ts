@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { appleMapsDirectionsUrl, googleMapsDirectionsUrl, mapyCzDirectionsUrl } from "../src/geo/directions";
-import { mapTileStatus, mapTileStatusLabel } from "../src/geo/tileStatus";
+import { mapTileStatus, mapTileStatusLabel, OSM_TILE_URL } from "../src/geo/tileStatus";
 
 const dest = { latitude: 49.704, longitude: 16.891 };
 const origin = { latitude: 50.08, longitude: 14.42 };
@@ -42,4 +42,8 @@ test("stav dlaždic: online / cache / miss", () => {
   expect(mapTileStatusLabel("online")).toBe("Mapa: online");
   expect(mapTileStatusLabel("offline-cached")).toBe("Mapa: poslední stažené dlaždice (offline)");
   expect(mapTileStatusLabel("offline-miss")).toBe("Mapa: dlaždice nejsou v mezipaměti");
+});
+
+test("OSM dlaždice jdou z kanonické URL bez a/b/c subdomény", () => {
+  expect(OSM_TILE_URL).toBe("https://tile.openstreetmap.org/{z}/{x}/{y}.png");
 });

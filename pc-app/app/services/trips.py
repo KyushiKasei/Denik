@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.db.models import Place, Trip, TripStop, now_iso
 from app.ids import new_public_id
 from app.logging_setup import get_logger
-from app.services.diary_io import VisitInputError, _parse_visited_at
+from app.services.diary_io import VisitInputError, _parse_visited_at, today_iso_date
 from app.services.geo import haversine_km
 
 _log = get_logger()
@@ -27,6 +27,26 @@ def list_trips(session: Session, *, include_deleted: bool = False) -> list[Trip]
 
 def get_trip(session: Session, public_id: str) -> Trip | None:
     return session.scalar(select(Trip).where(Trip.public_id == public_id))
+
+
+def list_upcoming_trips(session: Session) -> list[Trip]:
+    """Výlety bez data nebo s dneškem a později. Minulé dny vynechá."""
+    today = today_iso_date()
+    stmt = (
+        select(Trip)
+        .where(Trip.deleted_at.is_(None))
+        .where(or_(Trip.planned_on.is_(None), Trip.planned_on >= today))
+        .order_by(Trip.planned_on.is_(None), Trip.planned_on.asc(), Trip.updated_at.desc())
+    )
+    return list(session.scalars(stmt).all())
+
+
+def trips_accepting_place(session: Session, place: Place) -> list[Trip]:
+    return [
+        trip
+        for trip in list_upcoming_trips(session)
+        if not any(stop.place_public_id == place.public_id for stop in trip.stops)
+    ]
 
 
 def create_trip(
