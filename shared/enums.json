@@ -6,7 +6,10 @@
     { "code": "FORTRESS", "name_cs": "Pevnost", "sort_order": 4 },
     { "code": "MANOR", "name_cs": "Tvrz", "sort_order": 5 },
     { "code": "PALACE", "name_cs": "Palác / letohrádek", "sort_order": 6 },
-    { "code": "OTHER", "name_cs": "Jiné", "sort_order": 7 }
+    { "code": "LOOKOUT_TOWER", "name_cs": "Rozhledna", "sort_order": 7 },
+    { "code": "ZOO", "name_cs": "Zoo", "sort_order": 8 },
+    { "code": "CAVE", "name_cs": "Jeskyně", "sort_order": 9 },
+    { "code": "OTHER", "name_cs": "Jiné", "sort_order": 10 }
   ],
   "condition": [
     { "code": "PRESERVED", "name_cs": "Zachovalý" },
@@ -41,6 +44,10 @@
     { "code": "NKP", "name_cs": "Národní kulturní památka" },
     { "code": "UNKNOWN", "name_cs": "Neznámé" }
   ],
+  "visitability_filter_groups": [
+    { "code": "PUBLIC", "name_cs": "Přístupné veřejnosti", "codes": ["REGULAR", "SEASONAL", "FREE_ACCESS"] },
+    { "code": "NOT_PUBLIC", "name_cs": "Nepřístupné", "codes": ["PRIVATE", "TEMPORARILY_CLOSED", "CLOSED", "EXTINCT"] }
+  ],
   "source_types": [
     { "code": "wikidata", "name_cs": "Wikidata" },
     { "code": "pamatkovy_katalog", "name_cs": "Památkový katalog" },
@@ -49,6 +56,7 @@
     { "code": "wikipedia", "name_cs": "Wikipedia" },
     { "code": "wikimedia_commons", "name_cs": "Wikimedia Commons" },
     { "code": "osm", "name_cs": "OpenStreetMap" },
+    { "code": "official_web", "name_cs": "Oficiální web" },
     { "code": "ruian", "name_cs": "RÚIAN" },
     { "code": "manual", "name_cs": "Ruční zadání" }
   ]

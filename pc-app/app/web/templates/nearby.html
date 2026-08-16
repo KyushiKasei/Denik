@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Poblíž — Památky{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
+<script src="/static/vendor/leaflet/leaflet.js"></script>
+<script src="/static/nearby.js?v=5" defer></script>
+{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <h1>Poblíž</h1>
+</div>
+<p class="muted">Vzdušná čára od GPS, napsaného místa nebo souřadnic. Katalog se nemění.</p>
+
+<form class="filters nearby-form" method="get" action="/nearby" id="nearby-form"
+      hx-get="/nearby"
+      hx-target="#nearby-results"
+      hx-select="#nearby-results"
+      hx-swap="outerHTML"
+      hx-push-url="true"
+      hx-indicator="#nearby-search-status"
+      hx-trigger="submit, change delay:200ms from:select, input delay:250ms from:input[type=range]">
+  <label class="span-2">Kde jsem
+    <input type="search" name="q" id="nearby-q" value="{{ q }}"
+           placeholder="Obec nebo název památky"
+           autocomplete="off"
+           hx-get="/nearby/suggest"
+           hx-trigger="input changed delay:250ms"
+           hx-target="#nearby-suggest"
+           hx-include="[name=radius_km],[name=type],[name=visitability],[name=journal]">
+  </label>
+  <label>Šířka
+    <input type="text" name="lat" id="nearby-lat" value="{{ lat }}" inputmode="decimal" placeholder="49.704">
+  </label>
+  <label>Délka
+    <input type="text" name="lon" id="nearby-lon" value="{{ lon }}" inputmode="decimal" placeholder="16.891">
+  </label>
+  <label>Typ
+    <select name="type">
+      <option value="">Vše</option>
+      {% for item in place_types %}
+      <option value="{{ item.code }}" {% if type_code == item.code %}selected{% endif %}>{{ item.name_cs }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Přístupnost
+    <select name="visitability">
+      {% with selected = visitability, visitability_counts = none %}
+      {% include "places/_visitability_filter.html" %}
+      {% endwith %}
+    </select>
+  </label>
+  <label>Deník
+    <select name="journal">
+      <option value="">Vše</option>
+      <option value="visited" {% if journal == "visited" %}selected{% endif %}>Navštíveno</option>
+      <option value="not_visited" {% if journal == "not_visited" %}selected{% endif %}>Nenavštíveno</option>
+      <option value="want_to_visit" {% if journal == "want_to_visit" %}selected{% endif %}>Chci navštívit</option>
+      <option value="favorite" {% if journal == "favorite" %}selected{% endif %}>Oblíbené</option>
+    </select>
+  </label>
+  <label class="span-all">Vzdálenost: <span id="nearby-radius-label">{{ radius_km }}</span> km
+    <input type="range" name="radius_km" id="nearby-radius"
+           min="{{ radius_min }}" max="{{ radius_max }}" step="{{ radius_step }}" value="{{ radius_km }}">
+  </label>
+  <input type="hidden" name="origin_label" id="nearby-origin-label" value="{{ origin_label }}">
+  <div class="check-row">
+    <button type="button" class="secondary" id="nearby-gps">Tady jsem</button>
+    <button type="submit">Hledat</button>
+    <span id="nearby-search-status" class="htmx-indicator muted">Hledám…</span>
+  </div>
+  <p id="nearby-gps-error" class="error span-all" role="alert" hidden></p>
+</form>
+<div id="nearby-suggest"></div>
+
+<p class="map-legend">
+  <span class="is-visited"><i></i> navštíveno</span>
+  <span class="is-want"><i></i> chci navštívit</span>
+  <span><i></i> ostatní</span>
+</p>
+<div id="nearby-map-wrap" class="nearby-map"{% if not result.origin %} hidden{% endif %}>
+  <div id="nearby-map" class="nearby-map-canvas"></div>
+</div>
+<div id="nearby-results">
+  {% include "nearby/_results.html" %}
+</div>
+{% endblock %}

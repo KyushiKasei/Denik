@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pamatky.local/schemas/diary.schema.json",
+  "title": "diary.json",
+  "description": "Kontrakt osobního deníku mezi PC a PWA. schema_version 1 a 2. JSON visits[].id a trips[].id = public_id (UUIDv7). JSON place_id = Place.public_id. Integer databázové ID se sem nesmí dostat. Smazání se přenáší jako deleted_at (soft-delete). Verze 2 přidává trips.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "exported_at",
+    "exported_from",
+    "place_states",
+    "visits"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "enum": [1, 2]
+    },
+    "exported_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "exported_from": {
+      "type": "string",
+      "enum": ["pwa", "pc"]
+    },
+    "place_states": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/placeState"
+      }
+    },
+    "visits": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/visit"
+      }
+    },
+    "trips": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/trip"
+      }
+    }
+  },
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "dateOrNull": {
+      "anyOf": [
+        { "type": "null" },
+        { "type": "string", "format": "date" }
+      ]
+    },
+    "dateTimeOrNull": {
+      "anyOf": [
+        { "type": "null" },
+        { "type": "string", "format": "date-time" }
+      ]
+    },
+    "stringOrNull": {
+      "type": ["string", "null"]
+    },
+    "ratingOrNull": {
+      "anyOf": [
+        { "type": "null" },
+        { "type": "integer", "minimum": 1, "maximum": 5 }
+      ]
+    },
+    "placeState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "place_id",
+        "want_to_visit",
+        "favorite",
+        "personal_note",
+        "updated_at",
+        "deleted_at"
+      ],
+      "properties": {
+        "place_id": {
+          "$ref": "#/$defs/uuid",
+          "description": "Place.public_id. Nikdy integer places.id."
+        },
+        "want_to_visit": { "type": "boolean" },
+        "favorite": { "type": "boolean" },
+        "personal_note": { "$ref": "#/$defs/stringOrNull" },
+        "updated_at": { "type": "string", "format": "date-time" },
+        "deleted_at": { "$ref": "#/$defs/dateTimeOrNull" }
+      }
+    },
+    "visit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "place_id",
+        "visited_at",
+        "rating",
+        "people",
+        "note",
+        "created_at",
+        "updated_at",
+        "deleted_at"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/uuid",
+          "description": "Visit.public_id. Nikdy integer visits.id."
+        },
+        "place_id": {
+          "$ref": "#/$defs/uuid",
+          "description": "Place.public_id. Nikdy integer places.id."
+        },
+        "visited_at": { "$ref": "#/$defs/dateOrNull" },
+        "rating": { "$ref": "#/$defs/ratingOrNull" },
+        "people": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "note": { "$ref": "#/$defs/stringOrNull" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" },
+        "deleted_at": { "$ref": "#/$defs/dateTimeOrNull" }
+      }
+    },
+    "tripOrigin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["latitude", "longitude", "label"],
+      "properties": {
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "label": { "type": "string" }
+      }
+    },
+    "tripStop": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["place_id", "sort_order", "note"],
+      "properties": {
+        "place_id": {
+          "$ref": "#/$defs/uuid",
+          "description": "Place.public_id. Nikdy integer places.id."
+        },
+        "sort_order": { "type": "integer", "minimum": 0 },
+        "note": { "$ref": "#/$defs/stringOrNull" }
+      }
+    },
+    "trip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "planned_on",
+        "origin",
+        "notes",
+        "stops",
+        "created_at",
+        "updated_at",
+        "deleted_at"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/uuid",
+          "description": "Trip.public_id. Nikdy integer trips.id."
+        },
+        "name": { "type": "string", "minLength": 1 },
+        "planned_on": { "$ref": "#/$defs/dateOrNull" },
+        "origin": {
+          "anyOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/tripOrigin" }
+          ]
+        },
+        "notes": { "$ref": "#/$defs/stringOrNull" },
+        "stops": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/tripStop" }
+        },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" },
+        "deleted_at": { "$ref": "#/$defs/dateTimeOrNull" }
+      }
+    }
+  }
+}

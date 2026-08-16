@@ -4,9 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Památky{% endblock %}</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <link rel="stylesheet" href="/static/vendor/pico/pico.min.css">
   <link rel="stylesheet" href="/static/app.css">
-  <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
+  <script src="/static/vendor/htmx/htmx.min.js" defer></script>
+  {% block extra_head %}{% endblock %}
 </head>
 <body>
   <header class="container">
@@ -15,17 +16,70 @@
         <li><strong>Památky</strong></li>
       </ul>
       <ul>
-        <li><a href="/">Přehled</a></li>
-        <li><a href="/places">Katalog</a></li>
-        <li><a href="/places/new">Nové místo</a></li>
+        {% set path = request.url.path %}
+        <li><a href="/"{% if path == "/" %} aria-current="page"{% endif %}>Přehled</a></li>
+        <li><a href="/places"{% if path.startswith("/places") %} aria-current="page"{% endif %}>Katalog</a></li>
+        <li><a href="/visits"{% if path.startswith("/visits") %} aria-current="page"{% endif %}>Návštěvy</a></li>
+        <li><a href="/trips"{% if path.startswith("/trips") %} aria-current="page"{% endif %}>Výlety</a></li>
+        <li><a href="/nearby"{% if path.startswith("/nearby") %} aria-current="page"{% endif %}>Poblíž</a></li>
+        <li><a href="/import"{% if path.startswith("/import") %} aria-current="page"{% endif %}>Import{% if open_review_count %} <span class="badge">{{ open_review_count }}</span>{% endif %}</a></li>
+        <li><a href="/backup"{% if path.startswith("/backup") %} aria-current="page"{% endif %}>Záloha</a></li>
       </ul>
     </nav>
   </header>
+  <div class="container" id="import-live"
+       hx-get="/import/progress"
+       hx-trigger="load, every 1s [document.getElementById('import-job-state') && document.getElementById('import-job-state').getAttribute('data-busy')==='1']"
+       hx-swap="innerHTML">
+    {% include "import/progress.html" %}
+  </div>
   <main class="container">
     {% if notice %}
     <p class="notice" role="status">{{ notice }}</p>
     {% endif %}
     {% block content %}{% endblock %}
   </main>
+  {% block extra_scripts %}{% endblock %}
+  <script>
+    (function () {
+      function syncImportButtons() {
+        var flag = document.getElementById("import-job-state");
+        var busy = flag && flag.getAttribute("data-busy") === "1";
+        document.querySelectorAll(".import-job-form button[type=submit]").forEach(function (btn) {
+          btn.disabled = busy;
+        });
+      }
+      document.body.addEventListener("submit", function (event) {
+        if (event.defaultPrevented) {
+          return;
+        }
+        var form = event.target;
+        if (!(form instanceof HTMLFormElement)) {
+          return;
+        }
+        if (form.method.toLowerCase() !== "post") {
+          return;
+        }
+        if (form.hasAttribute("hx-get") || form.hasAttribute("hx-post")) {
+          return;
+        }
+        if (form.dataset.submitting === "1") {
+          event.preventDefault();
+          return;
+        }
+        form.dataset.submitting = "1";
+        form.querySelectorAll("button[type=submit], input[type=submit]").forEach(function (btn) {
+          btn.disabled = true;
+        });
+      });
+      document.body.addEventListener("htmx:afterSwap", function (event) {
+        var target = event.detail && event.detail.target;
+        if (target && target.id === "import-live") {
+          syncImportButtons();
+        }
+      });
+      syncImportButtons();
+    })();
+  </script>
 </body>
 </html>

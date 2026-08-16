@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Výlety — Památky{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <h1>Výlety</h1>
+</div>
+<p class="muted">Seřazené zastávky na den. Vzdušná čára, ne silnice. Přenos je v <code>diary.json</code>.</p>
+
+<form method="post" action="/trips" class="filters">
+  {% if errors.form %}<p class="error">{{ errors.form }}</p>{% endif %}
+  <label>Název
+    <input type="text" name="name" value="{{ form_name }}" required>
+  </label>
+  <label>Datum
+    <input type="date" name="planned_on" value="{{ form_planned_on }}">
+  </label>
+  <button type="submit">Nový výlet</button>
+</form>
+
+{% if trips %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Název</th>
+        <th>Datum</th>
+        <th>Zastávky</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for trip in trips %}
+      <tr>
+        <td><a href="/trips/{{ trip.public_id }}">{{ trip.name }}</a></td>
+        <td>{{ trip.planned_on or "—" }}</td>
+        <td>{{ trip.stops | length }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="muted">Zatím žádný výlet.</p>
+{% endif %}
+{% endblock %}

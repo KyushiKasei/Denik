@@ -1,3 +1,41 @@
-from app.db.models import AppMeta, Base, Place, PlacePlaceType, PlaceType
+from app.db.models import (
+    AppMeta,
+    Base,
+    DiaryImportIssue,
+    ImportFieldChange,
+    ImportReview,
+    ImportReviewCandidate,
+    ImportRun,
+    Place,
+    PlaceFieldOverride,
+    PlaceJournalState,
+    PlacePhoto,
+    PlacePlaceType,
+    PlaceSource,
+    PlaceSourceValue,
+    PlaceType,
+    Trip,
+    TripStop,
+    Visit,
+)
 
-__all__ = ["AppMeta", "Base", "Place", "PlacePlaceType", "PlaceType"]
+__all__ = [
+    "AppMeta",
+    "Base",
+    "DiaryImportIssue",
+    "ImportFieldChange",
+    "ImportReview",
+    "ImportReviewCandidate",
+    "ImportRun",
+    "Place",
+    "PlaceFieldOverride",
+    "PlaceJournalState",
+    "PlacePhoto",
+    "PlacePlaceType",
+    "PlaceSource",
+    "PlaceSourceValue",
+    "PlaceType",
+    "Trip",
+    "TripStop",
+    "Visit",
+]

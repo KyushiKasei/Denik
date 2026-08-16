@@ -44,9 +44,30 @@ def get_database_url() -> str:
     return sqlite_url()
 
 
+def get_export_dir() -> Path:
+    return get_data_dir() / "export"
+
+
+def get_default_catalog_path() -> Path:
+    return get_export_dir() / "catalog.json"
+
+
+def get_default_diary_path() -> Path:
+    return get_export_dir() / "diary.json"
+
+
+def catalog_schema_path() -> Path:
+    return REPO_ROOT / "shared" / "schemas" / "catalog.schema.json"
+
+
+def diary_schema_path() -> Path:
+    return REPO_ROOT / "shared" / "schemas" / "diary.schema.json"
+
+
 def ensure_data_dir() -> Path:
     data_dir = get_data_dir()
     data_dir.mkdir(parents=True, exist_ok=True)
     (data_dir / "backups").mkdir(exist_ok=True)
     (data_dir / "logs").mkdir(exist_ok=True)
+    get_export_dir().mkdir(exist_ok=True)
     return data_dir

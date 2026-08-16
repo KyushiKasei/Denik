@@ -6,27 +6,12 @@ import pytest
 from sqlalchemy import inspect, select
 from sqlalchemy.orm import Session
 
+from app.db.enums import codes, format_types
 from app.db.migrate import run_migrations
 from app.db.models import Place, PlaceType
-from app.db.seed import seed_place_types
-from app.db.session import create_engine_for, make_session_factory
+from app.db.session import create_engine_for
 from app.ids import new_public_id
-
-
-EXPECTED_TYPE_CODES = {"CASTLE", "CHATEAU", "RUIN", "FORTRESS", "MANOR", "PALACE", "OTHER"}
-
-
-@pytest.fixture
-def session(tmp_path: Path) -> Session:
-    db_path = tmp_path / "test.sqlite3"
-    run_migrations(db_path)
-    engine = create_engine_for(db_path)
-    factory = make_session_factory(engine)
-    db = factory()
-    seed_place_types(db)
-    yield db
-    db.close()
-    engine.dispose()
+from app.services.catalog_schema import load_catalog_schema
 
 
 def test_migration_creates_tables(tmp_path: Path) -> None:
@@ -79,6 +64,37 @@ def test_public_id_cannot_be_reassigned(session: Session) -> None:
 
 
 def test_seed_contains_expected_types(session: Session) -> None:
-    codes = set(session.scalars(select(PlaceType.code)).all())
-    assert codes == EXPECTED_TYPE_CODES
-    assert "CASTLE_CHATEAU" not in codes
+    codes_in_db = set(session.scalars(select(PlaceType.code)).all())
+    assert codes_in_db == codes("place_types")
+    assert "CASTLE_CHATEAU" not in codes_in_db
+
+
+def test_catalog_schema_enums_match_enums_json() -> None:
+    defs = load_catalog_schema()["$defs"]
+    assert set(defs["placeTypeCode"]["enum"]) == codes("place_types")
+    assert set(defs["conditionCode"]["enum"]) == codes("condition")
+    assert set(defs["visitabilityCode"]["enum"]) == codes("visitability")
+    assert set(defs["heritageStatusCode"]["enum"]) == codes("heritage_status")
+
+
+def test_format_types_matches_pwa() -> None:
+    assert format_types(["CASTLE", "CHATEAU"]) == "Hrad a zámek"
+    assert format_types([]) == "Bez typu"
+    assert format_types(["CASTLE"]) == "Hrad"
+    assert format_types(["LOOKOUT_TOWER"]) == "Rozhledna"
+    assert format_types(["ZOO"]) == "Zoo"
+    assert format_types(["CAVE"]) == "Jeskyně"
+
+
+def test_seed_updates_stale_type_labels(session: Session) -> None:
+    from app.db.seed import seed_place_types
+
+    row = session.scalar(select(PlaceType).where(PlaceType.code == "CASTLE"))
+    assert row is not None
+    row.name_cs = "Stale"
+    row.sort_order = 99
+    session.commit()
+    seed_place_types(session)
+    session.refresh(row)
+    assert row.name_cs == "Hrad"
+    assert row.sort_order == 1

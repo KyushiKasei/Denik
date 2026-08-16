@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Fronta k rozhodnutí — Památky{% endblock %}
+{% block content %}
+<h1>Fronta k rozhodnutí</h1>
+<p>Nejasná shoda nevytvoří nové místo, dokud nezvolíte [Sloučit], [Vytvořit jako nové] nebo [Ignorovat].
+Stejný konkrétní název, kompatibilní typy a GPS do 300&nbsp;m se sloučí samo (i když OSM nemá obec) — připojí se zdroj, <code>public_id</code> zůstane.</p>
+{% if status == "open" and reviews %}
+<form method="post" action="/import/reviews/reprocess">
+  <button type="submit" {% if import_busy %}disabled{% endif %}>Přepočítat frontu (se zálohou)</button>
+</form>
+{% endif %}
+<p>
+  <a href="/import/reviews?status=open"{% if status == "open" %} aria-current="page"{% endif %}>Otevřené</a>
+  ·
+  <a href="/import/reviews?status=ignored"{% if status == "ignored" %} aria-current="page"{% endif %}>Ignorované</a>
+  ·
+  <a href="/import/reviews?status=all"{% if status == "all" %} aria-current="page"{% endif %}>Vše</a>
+</p>
+
+{% if reviews %}
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th>Zdroj</th>
+      <th>Externí ID</th>
+      <th>Důvod</th>
+      <th>Kandidát</th>
+      <th>Stav</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for review in reviews %}
+    <tr>
+      <td>{{ enum_label("source_types", review.source_type) }}</td>
+      <td><a href="/import/reviews/{{ review.id }}"><code>{{ review.external_id or "—" }}</code></a></td>
+      <td>{{ review.match_reason }}</td>
+      <td>
+        {% if review.candidate_place %}
+        <a href="/places/{{ review.candidate_place.public_id }}">{{ review.candidate_place.name }}</a>
+        {% else %}—{% endif %}
+      </td>
+      <td>{{ import_code_label("review_status", review.status) }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="muted">Fronta je prázdná.</p>
+{% endif %}
+<p><a href="/import">← Import centrum</a></p>
+{% endblock %}

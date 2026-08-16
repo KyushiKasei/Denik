@@ -2,8 +2,9 @@
 {% block title %}Přehled — Památky{% endblock %}
 {% block content %}
 <h1>Přehled katalogu</h1>
-<p>Počty jen nad master katalogem. Návštěvy a deník sem nepatří.</p>
+<p>Počty nad katalogem a osobním deníkem. Aktualizace katalogu deník nemění.</p>
 
+<h2>Kvalita katalogu</h2>
 <section class="stats-grid">
   <article class="stat-card">
     <a href="/places">
@@ -41,6 +42,46 @@
       <strong>{{ stats.total_archived }}</strong>
     </a>
   </article>
+  <article class="stat-card">
+    <a href="/places?quality_status=PROBABLE">
+      <small>Pravděpodobné</small>
+      <strong>{{ stats.probable }}</strong>
+    </a>
+  </article>
+  <article class="stat-card">
+    <a href="/places?quality_status=REJECTED">
+      <small>Vyřazené</small>
+      <strong>{{ stats.rejected }}</strong>
+    </a>
+  </article>
+</section>
+
+<h2>Deník</h2>
+<section class="stats-grid">
+  <article class="stat-card">
+    <a href="/visits">
+      <small>Počet návštěv</small>
+      <strong>{{ stats.visit_count }}</strong>
+    </a>
+  </article>
+  <article class="stat-card">
+    <a href="/places?journal=visited">
+      <small>Navštívených míst</small>
+      <strong>{{ stats.unique_visited_places }}</strong>
+    </a>
+  </article>
+  <article class="stat-card">
+    <a href="/places?journal=want_to_visit">
+      <small>Chci navštívit</small>
+      <strong>{{ stats.want_to_visit }}</strong>
+    </a>
+  </article>
+  <article class="stat-card">
+    <a href="/places?journal=favorite">
+      <small>Oblíbené</small>
+      <strong>{{ stats.favorite }}</strong>
+    </a>
+  </article>
 </section>
 
 <h2>Podle typů</h2>
@@ -56,5 +97,110 @@
   {% endfor %}
 </section>
 
+<h2>Export pro PWA</h2>
+<p>Vznikne <code>catalog.json</code> z hodnot katalogu. Archivovaná místa se nevyexportují. Verze katalogu se zvedne jen při změně obsahu.</p>
+{% if export_status.catalog_version %}
+<p class="muted">Poslední export: verze {{ export_status.catalog_version }}{% if export_status.last_export_at %}, {{ export_status.last_export_at }}{% endif %}.</p>
+{% endif %}
+<form method="post" action="/catalog/export" id="catalog-export-form">
+  <button type="submit">Exportovat catalog.json</button>
+</form>
+<p>
+  <button type="button" class="secondary" id="catalog-save-folder" hidden>Uložit do složky…</button>
+</p>
+<p class="muted" id="catalog-save-status" hidden></p>
+<p class="muted">Soubor se stáhne a uloží i do <code>{{ export_status.default_path }}</code>.</p>
+
+<h2>Deník</h2>
+<p>Osobní návštěvy jdou samostatným <code>diary.json</code>. Import je idempotentní podle ID návštěvy. Neznámé místo v deníku se do katalogu nezakládá.</p>
+{% if diary_status.last_import_at %}
+<p class="muted">Poslední import deníku: {{ diary_status.last_import_at }}.</p>
+{% endif %}
+{% if diary_status.last_export_at %}
+<p class="muted">Poslední export deníku: {{ diary_status.last_export_at }}.</p>
+{% endif %}
+<div class="actions-row">
+  <form method="post" action="/diary/export">
+    <button type="submit" class="secondary">Exportovat diary.json</button>
+  </form>
+</div>
+<form method="post" action="/diary/import" enctype="multipart/form-data">
+  <label>Importovat diary.json
+    <input type="file" name="file" accept="application/json,.json" required>
+  </label>
+  <button type="submit">Importovat deník</button>
+</form>
+<p class="muted">Export se uloží i do <code>{{ diary_status.default_path }}</code>.</p>
+
+{% if diary_issues %}
+<h3>Neznámá místa v deníku</h3>
+<p class="muted">Návštěvy jsou uložené. Místo se z deníku nezakládá.</p>
+<ul>
+  {% for issue in diary_issues %}
+  <li><code>{{ issue.place_public_id }}</code>{% if issue.visit_public_id %} · návštěva <code>{{ issue.visit_public_id }}</code>{% endif %}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+<h2>Záloha SQLite</h2>
+<p>Ruční kopie celé databáze (katalog + deník na PC). Obnova nahradí aktuální soubor. Živou SQLite nenechávejte v Dropboxu.</p>
+{% if backup_count|default(0) %}
+<p class="muted">Uložených záloh: {{ backup_count }}.</p>
+{% endif %}
+<p><a href="/backup" role="button" class="secondary">Záloha a obnova</a></p>
+
 <p class="muted">Databáze: <code>{{ db_path }}</code></p>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+  (function () {
+    var btn = document.getElementById("catalog-save-folder");
+    var status = document.getElementById("catalog-save-status");
+    if (!btn || !window.showSaveFilePicker) {
+      return;
+    }
+    btn.hidden = false;
+    btn.addEventListener("click", async function () {
+      if (status) {
+        status.hidden = true;
+        status.textContent = "";
+      }
+      var handle;
+      try {
+        handle = await window.showSaveFilePicker({
+          suggestedName: "catalog.json",
+          types: [{ description: "JSON", accept: { "application/json": [".json"] } }],
+        });
+      } catch (err) {
+        if (err && err.name === "AbortError") {
+          return;
+        }
+        if (status) {
+          status.hidden = false;
+          status.textContent = "Složku se nepodařilo vybrat.";
+        }
+        return;
+      }
+      try {
+        var response = await fetch("/catalog/export", { method: "POST" });
+        if (!response.ok) {
+          throw new Error("export");
+        }
+        var blob = await response.blob();
+        var writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        if (status) {
+          status.hidden = false;
+          status.textContent = "catalog.json je uložený do vybrané složky (a také do výchozí cesty).";
+        }
+      } catch (_err) {
+        if (status) {
+          status.hidden = false;
+          status.textContent = "Uložení do složky selhalo. Použijte běžné stažení.";
+        }
+      }
+    });
+  })();
+</script>
 {% endblock %}

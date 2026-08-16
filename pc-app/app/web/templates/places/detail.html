@@ -2,20 +2,28 @@
 {% block title %}{{ place.name }} — Památky{% endblock %}
 {% block content %}
 {% if place.is_archived %}
-<p class="archived-banner">Toto místo je v archivu. Záznam i <code>public_id</code> zůstávají v databázi.</p>
+<p class="archived-banner">Toto místo je v archivu. Záznam i interní ID zůstávají v databázi.
+  {% if place.merged_into_public_id %}
+  Sloučeno do <a href="/places/{{ place.merged_into_public_id }}"><code>{{ place.merged_into_public_id }}</code></a>.
+  {% endif %}
+</p>
 {% endif %}
 
 <div class="toolbar">
   <h1>{{ place.name }}</h1>
   <div class="actions-row">
     <a href="/places/{{ place.public_id }}/edit" role="button">Upravit</a>
+    <a href="/places/{{ place.public_id }}/overrides" role="button" class="secondary">Katalog vs zdroj</a>
     {% if place.is_archived %}
-    <form method="post" action="/places/{{ place.public_id }}/restore">
-      <button type="submit" class="secondary">Obnovit z archivu</button>
-    </form>
+      {% if not place.merged_into_public_id %}
+      <form method="post" action="/places/{{ place.public_id }}/restore">
+        <button type="submit" class="secondary">Obnovit z archivu</button>
+      </form>
+      {% endif %}
     {% else %}
+    <a href="/places/{{ place.public_id }}/merge" role="button" class="secondary">Sloučit s jiným</a>
     <form method="post" action="/places/{{ place.public_id }}/archive"
-          onsubmit="return confirm('Archivovat toto místo? Záznam zůstane v databázi včetně public_id.');">
+          onsubmit="return confirm('Archivovat toto místo? Záznam zůstane v databázi včetně interního ID.');">
       <button type="submit" class="secondary">Archivovat</button>
     </form>
     {% endif %}
@@ -89,5 +97,119 @@
 </dl>
 
 <p class="muted">Vytvořeno {{ place.created_at }} · Upraveno {{ place.updated_at }}{% if place.archived_at %} · Archivováno {{ place.archived_at }}{% endif %}</p>
+
+<section class="journal" id="denik">
+  <h2>Můj deník</h2>
+  <form method="post" action="/places/{{ place.public_id }}/journal">
+    <div class="check-row journal-flags">
+      <label>
+        <input type="checkbox" name="want_to_visit" value="1"
+               {% if journal_state and not journal_state.is_deleted and journal_state.want_to_visit %}checked{% endif %}>
+        Chci navštívit
+      </label>
+      <label>
+        <input type="checkbox" name="favorite" value="1"
+               {% if journal_state and not journal_state.is_deleted and journal_state.favorite %}checked{% endif %}>
+        Oblíbené
+      </label>
+    </div>
+    <label>Osobní poznámka
+      <textarea name="personal_note" rows="3">{% if journal_state and not journal_state.is_deleted %}{{ journal_state.personal_note or "" }}{% endif %}</textarea>
+    </label>
+    <p>
+      <button type="submit" class="secondary">Uložit poznámku a příznaky</button>
+    </p>
+  </form>
+
+  <h3>Návštěvy</h3>
+  {% if visits %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Datum</th>
+          <th>Hodnocení</th>
+          <th>Kdo tam byl</th>
+          <th>Poznámka</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for visit in visits %}
+        <tr>
+          <td>{{ visit.visited_at or "—" }}</td>
+          <td>{% if visit.rating %}{{ visit.rating }} / 5{% else %}—{% endif %}</td>
+          <td>{{ visit.people | join(", ") if visit.people else "—" }}</td>
+          <td>{{ visit.note or "—" }}</td>
+          <td class="actions-row">
+            <a href="/places/{{ place.public_id }}?edit={{ visit.public_id }}#denik">Upravit</a>
+            <form method="post" action="/places/{{ place.public_id }}/visits/{{ visit.public_id }}/delete"
+                  onsubmit="return confirm('Smazat tuto návštěvu? Záznam zůstane v deníku jako smazaný a přenese se při exportu.');">
+              <button type="submit" class="secondary">Smazat</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">Zatím žádná návštěva. Archivace místa návštěvy nemaže.</p>
+  {% endif %}
+
+  <form class="visit-form" method="post"
+        action="{% if editing_visit_id %}/places/{{ place.public_id }}/visits/{{ editing_visit_id }}{% else %}/places/{{ place.public_id }}/visits{% endif %}">
+    <fieldset>
+      <legend>{% if editing_visit_id %}Upravit návštěvu{% else %}Přidat návštěvu{% endif %}</legend>
+      {% if visit_form.errors.form %}<p class="error">{{ visit_form.errors.form }}</p>{% endif %}
+      <div class="grid">
+        <label class="{% if visit_form.errors.visited_at %}field-error{% endif %}">Datum
+          <input type="date" name="visited_at" value="{{ visit_form.visited_at }}" required>
+          {% if visit_form.errors.visited_at %}<small class="error">{{ visit_form.errors.visited_at }}</small>{% endif %}
+        </label>
+        <label class="{% if visit_form.errors.rating %}field-error{% endif %}">Hodnocení
+          <select name="rating">
+            <option value="" {% if not visit_form.rating %}selected{% endif %}>bez hodnocení</option>
+            {% for n in [1, 2, 3, 4, 5] %}
+            <option value="{{ n }}" {% if visit_form.rating == n|string %}selected{% endif %}>{{ n }}</option>
+            {% endfor %}
+          </select>
+          {% if visit_form.errors.rating %}<small class="error">{{ visit_form.errors.rating }}</small>{% endif %}
+        </label>
+      </div>
+      <label>Kdo tam byl
+        <input type="text" name="people" value="{{ visit_form.people }}" placeholder="Jana, Petr">
+      </label>
+      <label>Poznámka
+        <textarea name="note" rows="3">{{ visit_form.note }}</textarea>
+      </label>
+      <div class="actions-row">
+        <button type="submit">{% if editing_visit_id %}Uložit úpravy{% else %}Uložit návštěvu{% endif %}</button>
+        {% if editing_visit_id %}
+        <a href="/places/{{ place.public_id }}#denik" role="button" class="secondary">Zrušit</a>
+        {% endif %}
+      </div>
+    </fieldset>
+  </form>
+</section>
+
+{% if place.sources %}
+<h2>Externí zdroje</h2>
+<ul>
+  {% for source in place.sources %}
+  <li>
+    {{ source.source_type }}
+    {% if source.external_id %}<code>{{ source.external_id }}</code>{% endif %}
+    {% set page_url = source_page_url(source) %}
+    {% if page_url %}· <a href="{{ page_url }}" target="_blank" rel="noopener">odkaz</a>{% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+{% if place.field_overrides %}
+<p><a href="/places/{{ place.public_id }}/overrides">Ruční ochrany polí: {{ place.field_overrides | length }}</a></p>
+{% endif %}
+
 <p><a href="/places">← Zpět do katalogu</a></p>
 {% endblock %}

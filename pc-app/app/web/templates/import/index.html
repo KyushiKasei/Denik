@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+{% block title %}Import — Památky{% endblock %}
+{% block content %}
+<h1>Import centrum</h1>
+<p>Opakovatelný import s frontou k rozhodnutí a zálohou před zápisem. Po každém zdroji musí fungovat deduplikace.</p>
+
+<p class="actions-row">
+  <a href="/import/reviews">Fronta k rozhodnutí{% if open_review_count %} ({{ open_review_count }}){% endif %}</a>
+  ·
+  <a href="/import/changes">Katalog vs zdroj{% if open_change_count %} ({{ open_change_count }}){% endif %}</a>
+</p>
+
+<section>
+  <h2>Wikidata</h2>
+  <p>SPARQL z <code>query.wikidata.org</code> po typech (hrad, zámek, zřícenina, tvrz, rozhledna, zoo, jeskyně). Místa bez GPS se importují ke kontrole. Stažení může trvat několik minut. Průběh zápisu je nahoře jako <strong>kolik z kolika</strong>; v katalogu se místa objeví až po dokončení.</p>
+  <form method="post" action="/import/wikidata/preview" class="import-job-form">
+    <label>
+      <input type="checkbox" name="use_cache" value="1">
+      Použít poslední staženou odpověď (bez sítě)
+    </label>
+    <div class="actions-row">
+      <button type="submit" {% if import_busy %}disabled{% endif %}>Náhled Wikidata</button>
+      <button type="submit" formaction="/import/wikidata/apply" class="import-action" {% if import_busy %}disabled{% endif %}>Aplikovat Wikidata (se zálohou)</button>
+    </div>
+  </form>
+</section>
+
+<details class="filter-extra">
+  <summary>Doplňky zdrojů</summary>
+
+<section>
+  <h2>Památkový katalog</h2>
+  <p>CSV otevřená data (KP / NKP / UNESCO). Spojení přes ÚSKP nebo katalogové číslo. Licence CC BY 4.0. Náhled i zápis běží na pozadí; průběh je nahoře jako <strong>kolik z kolika</strong>.</p>
+  <form method="post" action="/import/pamatkovy_katalog/preview" class="import-job-form">
+    <label>
+      <input type="checkbox" name="use_cache" value="1">
+      Použít poslední stažený CSV (bez sítě)
+    </label>
+    <div class="actions-row">
+      <button type="submit" {% if import_busy %}disabled{% endif %}>Náhled katalogu</button>
+      <button type="submit" formaction="/import/pamatkovy_katalog/apply" {% if import_busy %}disabled{% endif %}>Aplikovat katalog (se zálohou)</button>
+    </div>
+  </form>
+</section>
+
+<section>
+  <h2>RÚIAN</h2>
+  <p>Jen normalizace názvů obce / okresu / kraje a kódů u už existujících míst. U míst se souřadnicemi bez obce doplní obec / okres z Nominatim (OSM) a namapuje na RÚIAN. Neimportuje nová místa.</p>
+  <form method="post" action="/import/ruian/preview" class="import-job-form">
+    <label>
+      <input type="checkbox" name="use_cache" value="1">
+      Použít poslední číselníky (bez sítě)
+    </label>
+    <div class="actions-row">
+      <button type="submit" {% if import_busy %}disabled{% endif %}>Náhled RÚIAN</button>
+      <button type="submit" formaction="/import/ruian/apply" {% if import_busy %}disabled{% endif %}>Aplikovat RÚIAN (se zálohou)</button>
+    </div>
+  </form>
+</section>
+
+<section>
+  <h2>NPÚ spravované objekty</h2>
+  <p>Oficiální URL a návštěvní odkazy (otevírací doba, vstupné). Neautorské texty ani fotky z webů NPÚ.</p>
+  <form method="post" action="/import/npu/preview" class="import-job-form">
+    <label>
+      <input type="checkbox" name="use_cache" value="1">
+      Použít poslední SPARQL odpověď (bez sítě)
+    </label>
+    <div class="actions-row">
+      <button type="submit" {% if import_busy %}disabled{% endif %}>Náhled NPÚ</button>
+      <button type="submit" formaction="/import/npu/apply" {% if import_busy %}disabled{% endif %}>Aplikovat NPÚ (se zálohou)</button>
+    </div>
+  </form>
+</section>
+
+<section>
+  <h2>Wikimedia Commons</h2>
+  <p>Metadata k P18 (autor, licence, atribuce, thumbnail URL). Binární fotky se do databáze nestahují.</p>
+  <form method="post" action="/import/wikimedia_commons/preview" class="import-job-form">
+    <label>
+      <input type="checkbox" name="use_cache" value="1">
+      Použít poslední metadata (bez sítě)
+    </label>
+    <div class="actions-row">
+      <button type="submit" {% if import_busy %}disabled{% endif %}>Náhled Commons</button>
+      <button type="submit" formaction="/import/wikimedia_commons/apply" {% if import_busy %}disabled{% endif %}>Aplikovat Commons (se zálohou)</button>
+    </div>
+  </form>
+</section>
+
+<section>
+  <h2>Wikipedia</h2>
+  <p>Jen URL a kontrola úplnosti kategorií. Texty článků se nekopírují.</p>
+  <form method="post" action="/import/wikipedia/preview" class="import-job-form">
+    <label>
+      <input type="checkbox" name="use_cache" value="1">
+      Použít poslední seznam (bez sítě)
+    </label>
+    <div class="actions-row">
+      <button type="submit" {% if import_busy %}disabled{% endif %}>Náhled Wikipedia</button>
+      <button type="submit" formaction="/import/wikipedia/apply" {% if import_busy %}disabled{% endif %}>Aplikovat Wikipedia (se zálohou)</button>
+    </div>
+  </form>
+</section>
+
+<section>
+  <h2>OpenStreetMap (volitelný doplněk)</h2>
+  <p>Není zdroj pravdy katalogu. Shoda přes tag <code>wikidata</code> nebo A/B/C. Licence ODbL.</p>
+  <form method="post" action="/import/osm/preview" class="import-job-form">
+    <label>
+      <input type="checkbox" name="use_cache" value="1">
+      Použít poslední Overpass odpověď (bez sítě)
+    </label>
+    <div class="actions-row">
+      <button type="submit" {% if import_busy %}disabled{% endif %}>Náhled OSM</button>
+      <button type="submit" formaction="/import/osm/apply" {% if import_busy %}disabled{% endif %}>Aplikovat OSM (se zálohou)</button>
+    </div>
+  </form>
+</section>
+
+<section>
+  <h2>Přístupnost z oficiálních webů</h2>
+  <p>Jen místa se stavem <strong>Neznámé</strong> a vyplněným oficiálním webem. Stáhne se homepage a hledají se návštěvní signály (prohlídky, vstupenky, otevírací doba). HTML ani autorský text se neukládá. Hrady.cz a Kudy z nudy se nescrapují. Tempo je omezené (asi 1 stránka za sekundu).</p>
+  <form method="post" action="/import/official_web/preview" class="import-job-form">
+    <label>
+      <input type="checkbox" name="use_cache" value="1">
+      Použít poslední klasifikaci (bez sítě)
+    </label>
+    <div class="actions-row">
+      <button type="submit" {% if import_busy %}disabled{% endif %}>Náhled webů</button>
+      <button type="submit" formaction="/import/official_web/apply" {% if import_busy %}disabled{% endif %}>Aplikovat weby (se zálohou)</button>
+    </div>
+  </form>
+</section>
+
+</details>
+
+<section>
+  <details {% if dev_mode %}open{% endif %}>
+    <summary>Vývoj</summary>
+    <p class="muted">Fixture importer je pro testy a ladění, ne pro běžný provoz. Veřejné zdroje nahoře zůstanou primární.</p>
+    <form method="post" action="/import/preview" class="import-job-form">
+      <label>Soubor
+        <select name="fixture">
+          {% for file in fixtures %}
+          <option value="{{ file.name }}" {% if file.name == default_fixture %}selected{% endif %}>{{ file.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <div class="actions-row">
+        <button type="submit" {% if import_busy %}disabled{% endif %}>Náhled</button>
+        <button type="submit" formaction="/import/apply" {% if import_busy %}disabled{% endif %}>Aplikovat (se zálohou)</button>
+      </div>
+    </form>
+  </details>
+</section>
+
+<h2>Poslední běhy</h2>
+{% if runs %}
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Zdroj</th>
+      <th>Stav</th>
+      <th>Přijato</th>
+      <th>Nové</th>
+      <th>Aktualizace</th>
+      <th>Beze změny</th>
+      <th>Ke kontrole</th>
+      <th>Ignorováno</th>
+      <th>Chyba</th>
+      <th>Začátek</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for run in runs %}
+    <tr>
+      <td><a href="/import/runs/{{ run.id }}">{{ run.id }}</a></td>
+      <td>{{ enum_label("source_types", run.source_type) }}</td>
+      <td>{{ import_code_label("run_status", run.status) }}</td>
+      <td>{{ run.records_received }}</td>
+      <td>{{ run.records_created }}</td>
+      <td>{{ run.records_updated }}</td>
+      <td>{{ run.records_unchanged }}</td>
+      <td>{{ run.records_review }}</td>
+      <td>{{ run.records_ignored }}</td>
+      <td>{{ run.records_failed }}</td>
+      <td>{{ run.started_at }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="muted">Zatím žádný import.</p>
+{% endif %}
+{% endblock %}

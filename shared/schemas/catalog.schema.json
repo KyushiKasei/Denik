@@ -1,0 +1,218 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pamatky.local/schemas/catalog.schema.json",
+  "title": "catalog.json",
+  "description": "Kontrakt katalogu mezi PC a PWA. schema_version 1. JSON places[].id = Place.public_id (UUIDv7). Integer databázové ID se sem nesmí dostat.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "catalog_version",
+    "generated_at",
+    "attribution",
+    "places"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "catalog_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "attribution": {
+      "$ref": "#/$defs/attribution"
+    },
+    "places": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/place"
+      }
+    }
+  },
+  "$defs": {
+    "httpUrl": {
+      "type": "string",
+      "minLength": 8,
+      "pattern": "^https?://"
+    },
+    "httpUrlOrNull": {
+      "anyOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/httpUrl" }
+      ]
+    },
+    "stringOrNull": {
+      "type": ["string", "null"]
+    },
+    "placeTypeCode": {
+      "type": "string",
+      "enum": ["CASTLE", "CHATEAU", "RUIN", "FORTRESS", "MANOR", "PALACE", "LOOKOUT_TOWER", "ZOO", "CAVE", "OTHER"]
+    },
+    "conditionCode": {
+      "type": "string",
+      "enum": ["PRESERVED", "RUIN", "REMAINS", "REBUILT", "EXTINCT", "UNKNOWN"]
+    },
+    "visitabilityCode": {
+      "type": "string",
+      "enum": [
+        "REGULAR",
+        "SEASONAL",
+        "BY_APPOINTMENT",
+        "EVENTS_ONLY",
+        "FREE_ACCESS",
+        "EXTERIOR_ONLY",
+        "PRIVATE",
+        "TEMPORARILY_CLOSED",
+        "CLOSED",
+        "EXTINCT",
+        "UNKNOWN"
+      ]
+    },
+    "heritageStatusCode": {
+      "type": "string",
+      "enum": ["NONE", "KP", "NKP", "UNKNOWN"]
+    },
+    "attribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["wikidata", "npu_opendata", "osm", "commons"],
+      "properties": {
+        "wikidata": { "type": "string", "minLength": 1 },
+        "npu_opendata": { "type": "string", "minLength": 1 },
+        "osm": { "type": "string", "minLength": 1 },
+        "commons": { "type": "string", "minLength": 1 }
+      }
+    },
+    "location": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "latitude",
+        "longitude",
+        "address",
+        "municipality",
+        "district",
+        "region",
+        "country"
+      ],
+      "properties": {
+        "latitude": {
+          "type": ["number", "null"],
+          "minimum": -90,
+          "maximum": 90
+        },
+        "longitude": {
+          "type": ["number", "null"],
+          "minimum": -180,
+          "maximum": 180
+        },
+        "address": { "$ref": "#/$defs/stringOrNull" },
+        "municipality": { "$ref": "#/$defs/stringOrNull" },
+        "district": { "$ref": "#/$defs/stringOrNull" },
+        "region": { "$ref": "#/$defs/stringOrNull" },
+        "country": { "type": "string", "minLength": 1 }
+      }
+    },
+    "links": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "official",
+        "wikipedia",
+        "wikidata",
+        "heritage_catalog",
+        "opening_hours",
+        "tickets"
+      ],
+      "properties": {
+        "official": { "$ref": "#/$defs/httpUrlOrNull" },
+        "wikipedia": { "$ref": "#/$defs/httpUrlOrNull" },
+        "wikidata": { "$ref": "#/$defs/httpUrlOrNull" },
+        "heritage_catalog": { "$ref": "#/$defs/httpUrlOrNull" },
+        "opening_hours": { "$ref": "#/$defs/httpUrlOrNull" },
+        "tickets": { "$ref": "#/$defs/httpUrlOrNull" }
+      }
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "thumbnail_url",
+        "original_url",
+        "attribution",
+        "license",
+        "license_url"
+      ],
+      "properties": {
+        "thumbnail_url": { "$ref": "#/$defs/httpUrlOrNull" },
+        "original_url": { "$ref": "#/$defs/httpUrlOrNull" },
+        "attribution": { "$ref": "#/$defs/stringOrNull" },
+        "license": { "$ref": "#/$defs/stringOrNull" },
+        "license_url": { "$ref": "#/$defs/httpUrlOrNull" }
+      }
+    },
+    "place": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "short_name",
+        "alternative_names",
+        "types",
+        "condition",
+        "visitability",
+        "short_description",
+        "heritage_status",
+        "unesco",
+        "location",
+        "links",
+        "image"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+          "description": "Place.public_id. Nikdy integer places.id."
+        },
+        "name": { "type": "string", "minLength": 1 },
+        "short_name": { "$ref": "#/$defs/stringOrNull" },
+        "alternative_names": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "types": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/placeTypeCode" },
+          "uniqueItems": true
+        },
+        "condition": { "$ref": "#/$defs/conditionCode" },
+        "visitability": { "$ref": "#/$defs/visitabilityCode" },
+        "short_description": { "$ref": "#/$defs/stringOrNull" },
+        "heritage_status": {
+          "anyOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/heritageStatusCode" }
+          ]
+        },
+        "unesco": { "type": "boolean" },
+        "location": { "$ref": "#/$defs/location" },
+        "links": { "$ref": "#/$defs/links" },
+        "image": {
+          "anyOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/image" }
+          ]
+        }
+      }
+    }
+  }
+}

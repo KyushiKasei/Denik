@@ -1,0 +1,29 @@
+{
+  "elements": [
+    {
+      "type": "way",
+      "id": 123456,
+      "center": {"lat": 49.704167, "lon": 16.891111},
+      "tags": {
+        "historic": "castle",
+        "castle_type": "defensive",
+        "name": "Bouzov",
+        "wikidata": "Q122922",
+        "wikipedia": "cs:Bouzov (hrad)",
+        "website": "https://www.hrad-bouzov.cz/",
+        "opening_hours": "Mo-Su 09:00-16:00"
+      }
+    },
+    {
+      "type": "node",
+      "id": 999001,
+      "lat": 50.1,
+      "lon": 14.4,
+      "tags": {
+        "historic": "castle",
+        "name": "Hrad BezWikidat",
+        "addr:city": "Praha"
+      }
+    }
+  ]
+}

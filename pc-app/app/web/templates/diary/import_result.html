@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Import deníku — Památky{% endblock %}
+{% block content %}
+<h1>Import deníku</h1>
+{% if filename %}<p class="muted">Soubor: {{ filename }}</p>{% endif %}
+{% if error %}
+<p class="error" role="alert">{{ error }}</p>
+<p><a href="/">← Zpět na přehled</a></p>
+{% else %}
+<p class="notice" role="status">Deník je sloučený. Místa se z deníku nezakládala.</p>
+<ul>
+  <li>návštěvy nové: {{ result.visits_inserted }}</li>
+  <li>návštěvy aktualizované: {{ result.visits_updated }}</li>
+  <li>návštěvy beze změny: {{ result.visits_unchanged }}</li>
+  <li>stavy nové: {{ result.states_inserted }}</li>
+  <li>stavy aktualizované: {{ result.states_updated }}</li>
+  <li>stavy beze změny: {{ result.states_unchanged }}</li>
+  <li>výlety nové: {{ result.trips_inserted }}</li>
+  <li>výlety aktualizované: {{ result.trips_updated }}</li>
+  <li>výlety beze změny: {{ result.trips_unchanged }}</li>
+</ul>
+{% if result.unknown_place_ids %}
+<p>Neznámá místa (návštěva uložena, místo v katalogu se nezakládá):</p>
+<ul>
+  {% for pid in result.unknown_place_ids %}
+  <li><code>{{ pid }}</code></li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% if result.warnings %}
+<p class="muted">Varování při shodném čase:</p>
+<ul>
+  {% for item in result.warnings %}
+  <li>{{ item }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% if result.backup_path %}
+<p class="muted">Záloha: <code>{{ result.backup_path }}</code></p>
+{% endif %}
+<p><a href="/">← Zpět na přehled</a></p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,48 @@
+{% if result.error %}
+<p class="error">{{ result.error }}</p>
+{% endif %}
+{% if result.origin %}
+<p class="muted">
+  Od: {{ result.origin.label }}
+  ({{ "%.5f"|format(result.origin.latitude) }}, {{ "%.5f"|format(result.origin.longitude) }})
+  · {{ result.hits | length }} v radiusu {{ result.radius_km }} km
+  · přeskočeno bez GPS: {{ result.skipped_no_gps }}
+</p>
+{% if map_data %}
+<script type="application/json" id="nearby-map-data">{{ map_data | tojson }}</script>
+{% endif %}
+{% if result.hits %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>km</th>
+        <th>Název</th>
+        <th>Typy</th>
+        <th>Obec</th>
+        <th>GPS</th>
+        <th>Deník</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for hit in result.hits %}
+      <tr>
+        <td>{{ "%.1f"|format(hit.km) }}</td>
+        <td><a href="/places/{{ hit.place.public_id }}">{{ hit.place.name }}</a></td>
+        <td>{{ hit.place.types_cs }}</td>
+        <td>{{ hit.place.municipality or "—" }}</td>
+        <td class="muted">{{ "%.5f"|format(hit.place.latitude) }}, {{ "%.5f"|format(hit.place.longitude) }}</td>
+        <td>
+          {% if hit.visited %}navštíveno{% elif hit.want_to_visit %}chci navštívit{% else %}—{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="muted">V tomto okruhu nic není (nebo filtr nic nenechal).</p>
+{% endif %}
+{% else %}
+<p class="muted">Zadejte GPS, souřadnice, nebo název obce / památky.</p>
+{% endif %}

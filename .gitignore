@@ -12,8 +12,11 @@ build/
 *.sqlite3-shm
 data/
 .env
+.DS_Store
+node_modules/
 pwa/node_modules/
 pwa/dist/
+pwa/dev-dist/
 deploy-netlify/*
 !deploy-netlify/.gitkeep
 !deploy-netlify/README.md

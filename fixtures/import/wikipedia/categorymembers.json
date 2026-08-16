@@ -1,0 +1,12 @@
+{
+  "categories": [
+    {
+      "category": "Kategorie:Hrady v Česku",
+      "members": [
+        {"title": "Bouzov (hrad)", "wikibase_item": "Q122922"},
+        {"title": "Karlštejn", "wikibase_item": "Q214651"},
+        {"title": "Hrad Neznámý", "wikibase_item": "Q999888777"}
+      ]
+    }
+  ]
+}

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 from urllib.parse import urlencode
 
@@ -19,9 +19,13 @@ from app.db.enums import (
     place_type_codes,
     quality_status_codes,
     visitability_codes,
+    visitability_filter_codes,
+    visitability_form_groups,
 )
-from app.db.models import Place, PlacePlaceType, PlaceType, now_iso
+from app.db.models import Place, PlaceJournalState, PlacePlaceType, PlaceSource, PlaceType, Visit, now_iso
 from app.logging_setup import get_logger
+from app.services.overrides import has_override, record_manual_edits, snapshot_place
+from app.services.source_urls import is_http_url
 
 PAGE_SIZE = 50
 SORT_CHOICES = {
@@ -81,7 +85,7 @@ def parse_url(raw: Any) -> tuple[str | None, str | None]:
     text = _blank_to_none(raw)
     if text is None:
         return None, None
-    if not (text.startswith("http://") or text.startswith("https://")):
+    if not is_http_url(text):
         return None, "URL musí začínat http:// nebo https://"
     return text, None
 
@@ -93,7 +97,7 @@ class PlaceInput:
     alternative_names: list[str] = field(default_factory=list)
     type_codes: list[str] = field(default_factory=list)
     condition: str = "UNKNOWN"
-    visitability: str = "UNKNOWN"
+    visitability: str = "REGULAR"
     quality_status: str = "VERIFIED"
     heritage_status: str | None = None
     unesco: bool = False
@@ -122,7 +126,7 @@ class PlaceInput:
         data.alternative_names = parse_alternative_names(str(form.get("alternative_names") or ""))
         data.type_codes = [str(code) for code in form.getlist("type_codes") if str(code).strip()]
         data.condition = str(form.get("condition") or "UNKNOWN").strip()
-        data.visitability = str(form.get("visitability") or "UNKNOWN").strip()
+        data.visitability = str(form.get("visitability") or "REGULAR").strip()
         data.quality_status = str(form.get("quality_status") or "VERIFIED").strip()
         data.heritage_status = _blank_to_none(form.get("heritage_status"))
         data.unesco = str(form.get("unesco") or "") in {"1", "on", "true", "yes"}
@@ -222,6 +226,7 @@ class PlaceFilters:
     quality_status: str = ""
     missing_gps: bool = False
     missing_type: bool = False
+    journal: str = ""
     archived: str = "active"
     sort: str = "name"
     page: int = 1
@@ -238,6 +243,9 @@ class PlaceFilters:
         sort = params.get("sort") or "name"
         if sort not in SORT_CHOICES:
             sort = "name"
+        journal = (params.get("journal") or "").strip()
+        if journal not in {"visited", "not_visited", "want_to_visit", "favorite"}:
+            journal = ""
         return cls(
             q=(params.get("q") or "").strip(),
             type_code=(params.get("type") or "").strip(),
@@ -249,6 +257,7 @@ class PlaceFilters:
             quality_status=(params.get("quality_status") or "").strip(),
             missing_gps=params.get("missing_gps") in {"1", "on", "true"},
             missing_type=params.get("missing_type") in {"1", "on", "true"},
+            journal=journal,
             archived=archived,
             sort=sort,
             page=max(page, 1),
@@ -276,6 +285,8 @@ class PlaceFilters:
             pairs.append(("missing_gps", "1"))
         if self.missing_type:
             pairs.append(("missing_type", "1"))
+        if self.journal:
+            pairs.append(("journal", self.journal))
         if self.archived != "active":
             pairs.append(("archived", self.archived))
         if self.sort != "name":
@@ -284,6 +295,49 @@ class PlaceFilters:
         if shown_page > 1:
             pairs.append(("page", str(shown_page)))
         return urlencode(pairs)
+
+    def extra_count(self) -> int:
+        n = 0
+        if self.district:
+            n += 1
+        if self.municipality:
+            n += 1
+        if self.condition:
+            n += 1
+        if self.visitability:
+            n += 1
+        if self.quality_status:
+            n += 1
+        if self.missing_gps:
+            n += 1
+        if self.missing_type:
+            n += 1
+        if self.archived != "active":
+            n += 1
+        if self.sort != "name":
+            n += 1
+        return n
+
+    def is_filtered(self) -> bool:
+        return bool(
+            self.q
+            or self.type_code
+            or self.region
+            or self.district
+            or self.municipality
+            or self.condition
+            or self.visitability
+            or self.quality_status
+            or self.missing_gps
+            or self.missing_type
+            or self.journal
+            or self.archived != "active"
+            or self.sort != "name"
+        )
+
+    def excluding(self, **cleared: Any) -> PlaceFilters:
+        """Stejné filtry bez uvedených facetů (pro počty ve výběrech)."""
+        return replace(self, page=1, **cleared)
 
 
 @dataclass
@@ -311,6 +365,16 @@ def _apply_filters(stmt, filters: PlaceFilters):
                 Place.municipality.ilike(term),
                 Place.district.ilike(term),
                 Place.region.ilike(term),
+                Place.public_id.ilike(term),
+                exists(
+                    select(PlaceSource.id).where(
+                        PlaceSource.place_id == Place.id,
+                        or_(
+                            PlaceSource.external_id.ilike(term),
+                            PlaceSource.source_url.ilike(term),
+                        ),
+                    )
+                ),
             )
         )
     if filters.type_code:
@@ -330,13 +394,55 @@ def _apply_filters(stmt, filters: PlaceFilters):
     if filters.condition:
         stmt = stmt.where(Place.condition == filters.condition)
     if filters.visitability:
-        stmt = stmt.where(Place.visitability == filters.visitability)
+        codes = visitability_filter_codes(filters.visitability)
+        if len(codes) == 1:
+            stmt = stmt.where(Place.visitability == next(iter(codes)))
+        elif codes:
+            stmt = stmt.where(Place.visitability.in_(codes))
     if filters.quality_status:
         stmt = stmt.where(Place.quality_status == filters.quality_status)
     if filters.missing_gps:
         stmt = stmt.where(or_(Place.latitude.is_(None), Place.longitude.is_(None)))
     if filters.missing_type:
         stmt = stmt.where(~exists(select(PlacePlaceType.place_id).where(PlacePlaceType.place_id == Place.id)))
+    if filters.journal == "visited":
+        stmt = stmt.where(
+            exists(
+                select(Visit.id).where(
+                    Visit.place_public_id == Place.public_id,
+                    Visit.deleted_at.is_(None),
+                )
+            )
+        )
+    elif filters.journal == "not_visited":
+        stmt = stmt.where(
+            ~exists(
+                select(Visit.id).where(
+                    Visit.place_public_id == Place.public_id,
+                    Visit.deleted_at.is_(None),
+                )
+            )
+        )
+    elif filters.journal == "want_to_visit":
+        stmt = stmt.where(
+            exists(
+                select(PlaceJournalState.id).where(
+                    PlaceJournalState.place_public_id == Place.public_id,
+                    PlaceJournalState.want_to_visit == 1,
+                    PlaceJournalState.deleted_at.is_(None),
+                )
+            )
+        )
+    elif filters.journal == "favorite":
+        stmt = stmt.where(
+            exists(
+                select(PlaceJournalState.id).where(
+                    PlaceJournalState.place_public_id == Place.public_id,
+                    PlaceJournalState.favorite == 1,
+                    PlaceJournalState.deleted_at.is_(None),
+                )
+            )
+        )
     return stmt
 
 
@@ -365,20 +471,114 @@ def list_places(session: Session, filters: PlaceFilters) -> PlaceListResult:
     return PlaceListResult(places=list(rows), total=total, page=page, pages=pages, per_page=PAGE_SIZE)
 
 
-def distinct_locations(session: Session) -> dict[str, list[str]]:
-    def values(column) -> list[str]:
-        rows = session.scalars(
-            select(column)
-            .where(column.is_not(None), column != "")
-            .distinct()
-            .order_by(column.asc())
-        ).all()
-        return [str(item) for item in rows]
+def _count_places(session: Session, filters: PlaceFilters) -> int:
+    stmt = _apply_filters(select(func.count()).select_from(Place), filters)
+    return session.scalar(stmt) or 0
 
+
+def _count_by_column(session: Session, filters: PlaceFilters, column) -> dict[str, int]:
+    stmt = _apply_filters(
+        select(column, func.count()).select_from(Place).where(column.is_not(None), column != ""),
+        filters,
+    ).group_by(column)
+    return {str(code): int(n) for code, n in session.execute(stmt) if code}
+
+
+def _location_names(counts: dict[str, int], selected: str) -> list[str]:
+    names = [name for name, n in counts.items() if name and (n > 0 or name == selected)]
+    if selected and selected not in names:
+        names.append(selected)
+    return sorted(names, key=lambda item: item.casefold())
+
+
+@dataclass
+class FilterFacetCounts:
+    visitability: dict[str, int]
+    types: dict[str, int]
+    regions: dict[str, int]
+    districts: dict[str, int]
+    municipalities: dict[str, int]
+    conditions: dict[str, int]
+    quality: dict[str, int]
+    journal: dict[str, int]
+    archived: dict[str, int]
+
+
+def filter_facet_counts(session: Session, filters: PlaceFilters) -> FilterFacetCounts:
+    """Počty ve výběru: ostatní filtry platí, vlastní facet ne."""
+    visit_base = filters.excluding(visitability="")
+    by_visit = _count_by_column(session, visit_base, Place.visitability)
+    visitability = dict(by_visit)
+    visitability[""] = _count_places(session, visit_base)
+    for group in items("visitability_filter_groups"):
+        visitability[str(group["code"])] = sum(by_visit.get(code, 0) for code in group["codes"])
+
+    type_base = filters.excluding(type_code="")
+    type_stmt = (
+        _apply_filters(
+            select(PlaceType.code, func.count(func.distinct(Place.id)))
+            .select_from(Place)
+            .join(PlacePlaceType, PlacePlaceType.place_id == Place.id)
+            .join(PlaceType, PlaceType.id == PlacePlaceType.place_type_id),
+            type_base,
+        )
+        .group_by(PlaceType.code)
+    )
+    types = {str(code): int(n) for code, n in session.execute(type_stmt)}
+    types[""] = _count_places(session, type_base)
+
+    journal_base = filters.excluding(journal="")
+    journal = {"": _count_places(session, journal_base)}
+    for code in ("visited", "not_visited", "want_to_visit", "favorite"):
+        journal[code] = _count_places(session, replace(journal_base, journal=code))
+
+    archived_base = filters.excluding(archived="all")
+    archived = {
+        "all": _count_places(session, replace(archived_base, archived="all")),
+        "active": _count_places(session, replace(archived_base, archived="active")),
+        "archived": _count_places(session, replace(archived_base, archived="archived")),
+    }
+
+    region_base = filters.excluding(region="")
+    regions = _count_by_column(session, region_base, Place.region)
+    regions[""] = _count_places(session, region_base)
+    district_base = filters.excluding(district="")
+    districts = _count_by_column(session, district_base, Place.district)
+    districts[""] = _count_places(session, district_base)
+    municipality_base = filters.excluding(municipality="")
+    municipalities = _count_by_column(session, municipality_base, Place.municipality)
+    municipalities[""] = _count_places(session, municipality_base)
+    condition_base = filters.excluding(condition="")
+    conditions = _count_by_column(session, condition_base, Place.condition)
+    conditions[""] = _count_places(session, condition_base)
+    quality_base = filters.excluding(quality_status="")
+    quality = _count_by_column(session, quality_base, Place.quality_status)
+    quality[""] = _count_places(session, quality_base)
+
+    return FilterFacetCounts(
+        visitability=visitability,
+        types=types,
+        regions=regions,
+        districts=districts,
+        municipalities=municipalities,
+        conditions=conditions,
+        quality=quality,
+        journal=journal,
+        archived=archived,
+    )
+
+
+def distinct_locations(
+    session: Session,
+    filters: PlaceFilters | None = None,
+    counts: FilterFacetCounts | None = None,
+) -> dict[str, list[str]]:
+    active = filters or PlaceFilters()
+    facet = counts or filter_facet_counts(session, active)
     return {
-        "regions": values(Place.region),
-        "districts": values(Place.district),
-        "municipalities": values(Place.municipality),
+        "regions": _location_names(facet.regions, active.region),
+        "districts": _location_names(facet.districts, active.district),
+        "municipalities": _location_names(facet.municipalities, active.municipality),
     }
 
 
@@ -443,9 +643,11 @@ def update_place(session: Session, place: Place, data: PlaceInput) -> Place:
     if not data.validate():
         raise ValueError("PlaceInput is invalid")
     public_id = place.public_id
+    before = snapshot_place(place)
     _apply_input(place, data, session)
     if place.public_id != public_id:
         raise ValueError("Place.public_id is immutable and must never be changed")
+    record_manual_edits(session, place, before)
     session.commit()
     session.refresh(place)
     _log.info("place updated public_id=%s name=%s", place.public_id, place.name)
@@ -463,6 +665,8 @@ def archive_place(session: Session, place: Place) -> Place:
 
 
 def restore_place(session: Session, place: Place) -> Place:
+    if place.merged_into_public_id:
+        raise ValueError("Sloučené místo nelze obnovit — zůstává archivované u vítězného public_id.")
     if place.archived_at is not None:
         place.archived_at = None
         place.updated_at = now_iso()
@@ -470,6 +674,37 @@ def restore_place(session: Session, place: Place) -> Place:
         session.refresh(place)
         _log.info("place restored public_id=%s name=%s", place.public_id, place.name)
     return place
+
+
+def mark_ruins_free_access(session: Session) -> int:
+    """Zříceniny jdou navštívit bez otevírací doby. Ruční override se nepřepisuje."""
+    ruin_type = exists(
+        select(1)
+        .select_from(PlacePlaceType)
+        .join(PlaceType, PlaceType.id == PlacePlaceType.place_type_id)
+        .where(PlacePlaceType.place_id == Place.id, PlaceType.code == "RUIN")
+    )
+    places = list(
+        session.scalars(
+            select(Place).where(
+                Place.visitability == "UNKNOWN",
+                Place.condition != "EXTINCT",
+                or_(Place.condition == "RUIN", ruin_type),
+            )
+        ).all()
+    )
+    updated = 0
+    now = now_iso()
+    for place in places:
+        if has_override(session, place.id, "visitability"):
+            continue
+        place.visitability = "FREE_ACCESS"
+        place.updated_at = now
+        updated += 1
+    if updated:
+        session.commit()
+        _log.info("ruins marked free_access count=%s", updated)
+    return updated
 
 
 @dataclass
@@ -488,6 +723,12 @@ class DashboardStats:
     needs_review: int
     missing_gps: int
     missing_type: int
+    visit_count: int
+    unique_visited_places: int
+    probable: int
+    rejected: int
+    want_to_visit: int
+    favorite: int
     by_type: list[TypeStat]
 
 
@@ -522,6 +763,38 @@ def dashboard_stats(session: Session) -> DashboardStats:
         .order_by(PlaceType.sort_order, PlaceType.id)
     ).all()
     by_type = [TypeStat(code=row[0], name_cs=row[1], count=int(row[2])) for row in type_rows]
+    visit_count = session.scalar(
+        select(func.count()).select_from(Visit).where(Visit.deleted_at.is_(None))
+    ) or 0
+    unique_visited_places = session.scalar(
+        select(func.count(func.distinct(Visit.place_public_id))).where(Visit.deleted_at.is_(None))
+    ) or 0
+    probable = session.scalar(
+        select(func.count()).select_from(Place).where(active, Place.quality_status == "PROBABLE")
+    ) or 0
+    rejected = session.scalar(
+        select(func.count()).select_from(Place).where(active, Place.quality_status == "REJECTED")
+    ) or 0
+    want_to_visit = session.scalar(
+        select(func.count())
+        .select_from(Place)
+        .join(PlaceJournalState, PlaceJournalState.place_public_id == Place.public_id)
+        .where(
+            active,
+            PlaceJournalState.want_to_visit == 1,
+            PlaceJournalState.deleted_at.is_(None),
+        )
+    ) or 0
+    favorite = session.scalar(
+        select(func.count())
+        .select_from(Place)
+        .join(PlaceJournalState, PlaceJournalState.place_public_id == Place.public_id)
+        .where(
+            active,
+            PlaceJournalState.favorite == 1,
+            PlaceJournalState.deleted_at.is_(None),
+        )
+    ) or 0
     return DashboardStats(
         total_active=total_active,
         total_archived=total_archived,
@@ -530,6 +803,12 @@ def dashboard_stats(session: Session) -> DashboardStats:
         needs_review=needs_review,
         missing_gps=missing_gps,
         missing_type=missing_type,
+        visit_count=visit_count,
+        unique_visited_places=unique_visited_places,
+        probable=probable,
+        rejected=rejected,
+        want_to_visit=want_to_visit,
+        favorite=favorite,
         by_type=by_type,
     )
 
@@ -538,6 +817,8 @@ def form_context() -> dict[str, Any]:
     return {
         "conditions": items("condition"),
         "visitabilities": items("visitability"),
+        "visitability_filter_groups": items("visitability_filter_groups"),
+        "visitability_form_groups": visitability_form_groups(),
         "quality_statuses": items("quality_status"),
         "heritage_statuses": items("heritage_status"),
         "enum_label": label,

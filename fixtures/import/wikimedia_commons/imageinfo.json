@@ -1,0 +1,34 @@
+{
+  "attachments": [
+    {
+      "filename": "Hrad_Bouzov.jpg",
+      "name": "Bouzov",
+      "external_ids": {"wikidata": "Q122922", "uskp": "19895/8-2468"},
+      "types": ["CASTLE"],
+      "latitude": 49.704167,
+      "longitude": 16.891111,
+      "municipality": "Bouzov"
+    }
+  ],
+  "imageinfo": {
+    "query": {
+      "pages": {
+        "123": {
+          "title": "File:Hrad_Bouzov.jpg",
+          "imageinfo": [
+            {
+              "thumburl": "https://upload.wikimedia.org/wikipedia/commons/thumb/x/Hrad_Bouzov.jpg/640px-Hrad_Bouzov.jpg",
+              "descriptionurl": "https://commons.wikimedia.org/wiki/File:Hrad_Bouzov.jpg",
+              "extmetadata": {
+                "Artist": {"value": "<a href=\"https://commons.wikimedia.org/wiki/User:Jan\">Jan Novák</a>"},
+                "LicenseShortName": {"value": "CC BY-SA 4.0"},
+                "LicenseUrl": {"value": "https://creativecommons.org/licenses/by-sa/4.0/"},
+                "Attribution": {"value": "Jan Novák / Wikimedia Commons / CC BY-SA 4.0"}
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

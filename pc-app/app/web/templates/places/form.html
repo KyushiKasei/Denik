@@ -56,8 +56,12 @@
       </label>
       <label class="{% if form.errors.visitability %}field-error{% endif %}">Přístupnost
         <select name="visitability">
-          {% for item in visitabilities %}
-          <option value="{{ item.code }}" {% if form.visitability == item.code %}selected{% endif %}>{{ item.name_cs }}</option>
+          {% for group in visitability_form_groups %}
+          <optgroup label="{{ group.label }}">
+            {% for item in group.options %}
+            <option value="{{ item.code }}" {% if form.visitability == item.code %}selected{% endif %}>{{ item.name_cs }}</option>
+            {% endfor %}
+          </optgroup>
           {% endfor %}
         </select>
         {% if form.errors.visitability %}<small class="error">{{ form.errors.visitability }}</small>{% endif %}

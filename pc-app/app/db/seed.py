@@ -1,30 +1,28 @@
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.config import REPO_ROOT
+from app.db.enums import items
 from app.db.models import PlaceType
 
 
-def enums_path() -> Path:
-    return REPO_ROOT / "shared" / "enums.json"
-
-
 def seed_place_types(session: Session) -> None:
-    payload = json.loads(enums_path().read_text(encoding="utf-8"))
-    existing = {row.code for row in session.scalars(select(PlaceType)).all()}
-    for item in payload["place_types"]:
-        if item["code"] in existing:
+    """Doplní nové typy a synchronizuje name_cs / sort_order z shared/enums.json."""
+    existing = {row.code: row for row in session.scalars(select(PlaceType)).all()}
+    changed = False
+    for item in items("place_types"):
+        code = item["code"]
+        name_cs = str(item["name_cs"])
+        sort_order = int(item["sort_order"])
+        row = existing.get(code)
+        if row is None:
+            session.add(PlaceType(code=code, name_cs=name_cs, sort_order=sort_order))
+            changed = True
             continue
-        session.add(
-            PlaceType(
-                code=item["code"],
-                name_cs=item["name_cs"],
-                sort_order=int(item["sort_order"]),
-            )
-        )
-    session.commit()
+        if row.name_cs != name_cs or row.sort_order != sort_order:
+            row.name_cs = name_cs
+            row.sort_order = sort_order
+            changed = True
+    if changed:
+        session.commit()

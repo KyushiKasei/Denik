@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Náhled importu — Památky{% endblock %}
+{% block content %}
+<h1>Náhled importu</h1>
+<p>Zdroj: <code>{{ result.source_type }}</code> · {{ source_label }}. Nic se ještě nezapsalo do katalogu.</p>
+
+<section class="stats-grid">
+  <article class="stat-card"><small>Přijato</small><strong>{{ result.records_received }}</strong></article>
+  <article class="stat-card"><small>Nová místa</small><strong>{{ result.records_created }}</strong></article>
+  <article class="stat-card"><small>Aktualizace</small><strong>{{ result.records_updated }}</strong></article>
+  <article class="stat-card"><small>Review</small><strong>{{ result.records_review }}</strong></article>
+  <article class="stat-card"><small>Ignorováno</small><strong>{{ result.records_ignored }}</strong></article>
+  <article class="stat-card"><small>Chyba</small><strong>{{ result.records_failed }}</strong></article>
+  <article class="stat-card"><small>Bez GPS</small><strong>{{ without_gps }}</strong></article>
+</section>
+
+<form method="post" action="{{ apply_action }}" class="import-job-form">
+  {% for key, value in apply_hidden.items() %}
+  <input type="hidden" name="{{ key }}" value="{{ value }}">
+  {% endfor %}
+  <button type="submit" {% if import_busy %}disabled{% endif %}>Aplikovat (vytvoří zálohu)</button>
+  <a href="/import" class="secondary">Zpět</a>
+</form>
+
+<form class="filters" method="get" action="/import/preview-result">
+  <label>Úroveň shody
+    <select name="level">
+      {% for code, title in level_options %}
+      <option value="{{ code }}" {% if level == code %}selected{% endif %}>{{ title }}{% if code and level_counts.get(code) %} ({{ level_counts.get(code) }}){% endif %}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <div class="check-row">
+    <button type="submit" class="secondary">Filtrovat</button>
+    {% if level %}
+    <a href="/import/preview-result" role="button" class="secondary">Zrušit filtr</a>
+    {% endif %}
+  </div>
+</form>
+
+<p class="muted">
+  {% if filtered_total > shown_outcomes|length %}
+    Zobrazeno {{ shown_outcomes|length }} z {{ filtered_total }} záznamů{% if level %} (filtr: {{ import_code_label("level", level) }}){% endif %}.
+  {% else %}
+    {{ filtered_total }} záznamů{% if level %} (filtr: {{ import_code_label("level", level) }}){% endif %}.
+  {% endif %}
+</p>
+
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th>Název</th>
+      <th>Úroveň</th>
+      <th>Akce</th>
+      <th>Interní ID</th>
+      <th>Důvod</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in shown_outcomes %}
+    <tr>
+      <td>{{ item.name }}</td>
+      <td>{{ import_code_label("level", item.level) }}</td>
+      <td>{{ import_code_label("action", item.action) }}</td>
+      <td>{% if item.public_id %}<code>{{ item.public_id }}</code>{% else %}—{% endif %}</td>
+      <td>{{ item.reason }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

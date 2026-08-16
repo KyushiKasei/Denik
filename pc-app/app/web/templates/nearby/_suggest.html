@@ -1,0 +1,10 @@
+{% if suggestions %}
+<ul class="nearby-suggest">
+  {% for item in suggestions %}
+  <li>
+    <a href="/nearby?lat={{ item.latitude }}&lon={{ item.longitude }}&origin_label={{ item.label | urlencode }}&q={{ item.label | urlencode }}&radius_km={{ radius_km }}&type={{ type_code }}&visitability={{ visitability }}&journal={{ journal }}">{{ item.label }}</a>
+    <span class="muted">{{ "%.4f"|format(item.latitude) }}, {{ "%.4f"|format(item.longitude) }}</span>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}

@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Ke kontrole {{ review.id }} — Památky{% endblock %}
+{% block content %}
+<h1>Importovaný objekt</h1>
+<p class="muted">{{ enum_label("source_types", review.source_type) }} / <code>{{ review.external_id or "—" }}</code> · {{ import_code_label("review_status", review.status) }}</p>
+
+<section class="review-card">
+  <h2>{{ record.name }}</h2>
+  <dl class="detail-grid">
+    <dt>Typy</dt><dd>{{ (record.types or []) | join(", ") or "—" }}</dd>
+    <dt>Obec</dt><dd>{{ record.municipality or "—" }}</dd>
+    <dt>Okres</dt><dd>{{ record.district or "—" }}</dd>
+    <dt>GPS</dt>
+    <dd>{% if record.latitude is not none %}{{ record.latitude }}, {{ record.longitude }}{% else %}chybí{% endif %}</dd>
+    <dt>Důvod</dt><dd>{{ review.match_reason }}</dd>
+  </dl>
+</section>
+
+<h2>Možná existující památka</h2>
+{% if review.candidates %}
+{% for candidate in review.candidates %}
+<article class="review-card">
+  <h3>
+    <a href="/places/{{ candidate.place.public_id }}">{{ candidate.place.name }}</a>
+    <span class="badge">skóre {{ "%.2f"|format(candidate.score or 0) }}</span>
+  </h3>
+  <p class="public-id">Interní ID: <code>{{ candidate.place.public_id }}</code></p>
+  <dl class="detail-grid">
+    <dt>Obec</dt><dd>{{ candidate.place.municipality or "—" }}</dd>
+    <dt>Okres</dt><dd>{{ candidate.place.district or "—" }}</dd>
+    <dt>GPS</dt>
+    <dd>
+      {% if candidate.place.has_gps %}
+        {{ candidate.place.latitude }}, {{ candidate.place.longitude }}
+      {% else %}chybí{% endif %}
+    </dd>
+    <dt>Důvod</dt><dd>{{ candidate.reason }}</dd>
+  </dl>
+  {% if review.status == "open" %}
+  <form method="post" action="/import/reviews/{{ review.id }}/merge">
+    <input type="hidden" name="place_id" value="{{ candidate.place.id }}">
+    <button type="submit">Sloučit</button>
+  </form>
+  {% endif %}
+</article>
+{% endfor %}
+{% else %}
+<p class="muted">Žádný kandidát v katalogu.</p>
+{% endif %}
+
+{% if review.status == "open" %}
+<div class="actions-row">
+  <form method="post" action="/import/reviews/{{ review.id }}/create">
+    <button type="submit">Vytvořit jako nové</button>
+  </form>
+  <form method="post" action="/import/reviews/{{ review.id }}/ignore">
+    <button type="submit" class="secondary">Ignorovat</button>
+  </form>
+</div>
+{% elif review.status == "ignored" %}
+<form method="post" action="/import/reviews/{{ review.id }}/unignore">
+  <button type="submit" class="secondary">Zrušit ignoraci</button>
+</form>
+{% endif %}
+
+<p><a href="/import/reviews">← Fronta</a></p>
+{% endblock %}

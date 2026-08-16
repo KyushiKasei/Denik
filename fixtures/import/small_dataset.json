@@ -1,0 +1,79 @@
+{
+  "source_type": "wikidata",
+  "records": [
+    {
+      "source_type": "wikidata",
+      "external_id": "Q122922",
+      "external_ids": {
+        "wikidata": "Q122922",
+        "pamatkovy_katalog": "1000004417",
+        "uskp": "17905"
+      },
+      "name": "Bouzov",
+      "alternative_names": ["Hrad Bouzov", "Státní hrad Bouzov"],
+      "types": ["CASTLE"],
+      "condition": "PRESERVED",
+      "visitability": "REGULAR",
+      "latitude": 49.704,
+      "longitude": 16.891,
+      "municipality": "Bouzov",
+      "district": "Olomouc",
+      "region": "Olomoucký kraj",
+      "short_description": "Gotický hrad ze 14. století.",
+      "official_website": "https://www.hrad-bouzov.cz/",
+      "wikipedia_url": "https://cs.wikipedia.org/wiki/Bouzov_(hrad)",
+      "heritage_status": "NKP",
+      "source_url": "https://www.wikidata.org/wiki/Q122922",
+      "license": "CC0",
+      "image": null
+    },
+    {
+      "source_type": "wikidata",
+      "external_id": "Q214651",
+      "external_ids": {
+        "wikidata": "Q214651"
+      },
+      "name": "Karlštejn",
+      "alternative_names": ["Hrad Karlštejn", "Státní hrad Karlštejn"],
+      "types": ["CASTLE"],
+      "condition": "PRESERVED",
+      "visitability": "REGULAR",
+      "latitude": 49.93944,
+      "longitude": 14.18806,
+      "municipality": "Karlštejn",
+      "district": "Beroun",
+      "region": "Středočeský kraj",
+      "short_description": "Gotický hrad založený Karlem IV.",
+      "official_website": "https://www.hrad-karlstejn.cz/",
+      "wikipedia_url": "https://cs.wikipedia.org/wiki/Karlštejn",
+      "heritage_status": "NKP",
+      "source_url": "https://www.wikidata.org/wiki/Q214651",
+      "license": "CC0",
+      "image": null
+    },
+    {
+      "source_type": "wikidata",
+      "external_id": "Q1010040",
+      "external_ids": {
+        "wikidata": "Q1010040"
+      },
+      "name": "Hluboká nad Vltavou",
+      "alternative_names": ["Zámek Hluboká"],
+      "types": ["CHATEAU"],
+      "condition": "PRESERVED",
+      "visitability": "REGULAR",
+      "latitude": 49.145,
+      "longitude": 14.441,
+      "municipality": "Hluboká nad Vltavou",
+      "district": "České Budějovice",
+      "region": "Jihočeský kraj",
+      "short_description": "Zámek v novogotickém slohu.",
+      "official_website": "https://www.zamek-hluboka.eu/",
+      "wikipedia_url": "https://cs.wikipedia.org/wiki/Zámek_Hluboká",
+      "heritage_status": "NKP",
+      "source_url": "https://www.wikidata.org/wiki/Q1010040",
+      "license": "CC0",
+      "image": null
+    }
+  ]
+}

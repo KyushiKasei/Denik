@@ -1,0 +1,3 @@
+Pico CSS 2.1.1 — pico.min.css
+HTMX 2.0.4 — htmx.min.js
+Leaflet 1.9.4 — leaflet.css, leaflet.js, images/

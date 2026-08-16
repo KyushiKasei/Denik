@@ -1,6 +1,6 @@
 # PLAN.md — Osobní katalog hradů, zámků a historických míst
 
-Stav: rozhodnutí uzavřena. Fáze 1 se implementuje.
+Stav: rozhodnutí uzavřena. Fáze 1–9 (MVP) jsou hotové. Fáze 10 (Poblíž na mapě) je hotová.
 
 Závazný funkční dokument: `_Zadani/ZADANI_AI_PROGRAMATOR_PAMATKY.md`.
 Tento plán ho nerozšiřuje o server, REST mezi PC a mobilem, účty ani automatickou cloud synchronizaci.
@@ -283,7 +283,7 @@ Propojení je jen přes `Place.public_id`. Katalogový import deníkové tabulky
 place_types
 -----------
 id              INTEGER PK
-code            TEXT UNIQUE NOT NULL   -- CASTLE, CHATEAU, RUIN, FORTRESS, MANOR, PALACE, OTHER
+code            TEXT UNIQUE NOT NULL   -- CASTLE, CHATEAU, RUIN, FORTRESS, MANOR, PALACE, LOOKOUT_TOWER, ZOO, CAVE, OTHER
 name_cs         TEXT NOT NULL
 sort_order      INTEGER NOT NULL DEFAULT 0
 ```
@@ -298,9 +298,12 @@ Počáteční typy (bez `CASTLE_CHATEAU`):
 | FORTRESS | Pevnost |
 | MANOR | Tvrz |
 | PALACE | Palác / letohrádek |
+| LOOKOUT_TOWER | Rozhledna |
+| ZOO | Zoo |
+| CAVE | Jeskyně |
 | OTHER | Jiné |
 
-Další typy (klášter, rozhledna, jeskyně) se přidají migrací, až budou potřeba. Entita se nejmenuje Castle.
+Další typy (klášter) se přidají seedem `place_types` z `shared/enums.json`, až budou potřeba. Entita se nejmenuje Castle.
 
 ```text
 condition:     PRESERVED | RUIN | REMAINS | REBUILT | EXTINCT | UNKNOWN
@@ -675,9 +678,13 @@ Automatická shoda, pokud platí **jedna** z těchto sad:
 
 1. vzdálenost ≤ 100 m **a** podobnost názvu ≥ 0,90 **a** (stejná obec nebo obec na jedné straně chybí) **a** kompatibilní typy,
 2. identický normalizovaný název **a** stejná obec **a** vzdálenost ≤ 300 m,
-3. identický normalizovaný název **a** stejný okres **a** vzdálenost ≤ 80 m.
+3. identický normalizovaný název **a** stejný okres **a** vzdálenost ≤ 80 m,
+4. identický konkrétní název (ne holé „zámek/hrad/tvrz/…“) **a** kompatibilní typy **a** (stejná obec nebo obec na jedné straně chybí) **a** vzdálenost ≤ 300 m,
+5. identický konkrétní název **a** stejná obec **a** kompatibilní typy **a** (GPS chybí, nebo vzdálenost ≤ 300 m).
 
-Kompatibilní typy: prázdná množina na jedné straně, nebo neprázdný průnik, nebo `{CASTLE, CHATEAU, RUIN, MANOR}` mezi sebou. `OTHER` samo o sobě nestačí k automatickému sloučení.
+Sada 4 pokrývá OSM relaci bez `addr:city`. Sada 5 připojuje zdroj (typicky Památkový katalog bez souřadnic) k už existujícímu místu stejného jména ve stejné obci. Katastrální popisky (`62746, Olomouc I, retrodíl…`) se jako alternativní název k matchingu nepoužívají. Holý generický název zůstává v review.
+
+Kompatibilní typy: prázdná množina na jedné straně, nebo neprázdný průnik, nebo `{CASTLE, CHATEAU, RUIN, MANOR, PALACE, FORTRESS}` mezi sebou. `OTHER` / rozhledna / jeskyně / zoo samo o sobě nestačí k automatickému sloučení.
 
 Každé automatické B se zapíše do `import_runs.log` včetně důvodu a vzdálenosti.
 
@@ -689,8 +696,9 @@ Typicky:
 
 - vzdálenost ≤ 400 m a podobnost ≥ 0,75,
 - stejná obec a podobnost ≥ 0,82,
-- stejný okres a identický normalizovaný název, ale vzdálenost > 80 m,
 - dvě různá existující Place by vyhovovala úrovni B.
+
+Samotný shodný název (bez obce nebo GPS) nestačí k review ani ke sloučení. Záznam se zdrojem s vlastním externím ID se založí jako nové místo.
 
 UI: importovaný objekt, kandidáti, GPS rozdíl, obec, [Sloučit] [Vytvořit jako nové] [Ignorovat].
 
@@ -1053,7 +1061,7 @@ Každá fáze musí jít samostatně dokončit, otestovat a zastavit. Další f�
 
 **Implementuje se:**
 
-- SPARQL klient s User-Agent, timeout, případné rozdělení dotazu po typech (hrad, zámek, zřícenina, tvrz),
+- SPARQL klient s User-Agent, timeout, případné rozdělení dotazu po typech (hrad, zámek, zřícenina, tvrz, rozhledna, zoo, jeskyně),
 - mapování QID, názvu, typů, souřadnic, webu, Wikipedie, P18, P4075 ÚSKP,
 - místa bez GPS se importují, `quality_status = NEEDS_REVIEW`,
 - preview počtů, apply přes framework z fáze 3,
@@ -1200,6 +1208,26 @@ Pořadí:
 
 ---
 
+### Fáze 10 — Poblíž na mapě (po MVP)
+
+**Cíl:** Na mapě v PC i PWA ukázat, co je v dosahu od GPS, napsaného místa nebo ručních souřadnic.
+
+**Implementuje se:**
+
+- PC stránka `/nearby` (HTMX + Leaflet): origin z GPS / obce nebo názvu v katalogu / lat-lon, šoupátko 5–150 km (výchozí 30), filtry typ / přístupnost / deník, seznam podle vzdušné čáry, počitadlo bez GPS, odkaz na detail,
+- PWA záložka Mapa se stejným chováním a konstantami,
+- Haversine stejný vzorec jako `matching.distance_m` (Python i TypeScript),
+- nápověda originu z katalogu, volitelný Nominatim (žádný vlastní geocoding server),
+- místa bez souřadnic se do Poblíž nepočítají.
+
+**Neimplementuje se:** routing, výlety / Trip, offline mapové dlaždice, nový JSON, nové tabulky, REST mezi PC a mobilem.
+
+**Testy:** pořadí podle km, hranice radiusu, null GPS ven, filtr typu, lookup obce/místa.
+
+**Hotovo když:** Na PC i v PWA jde zadat origin, posunout radius a dostat seřazený seznam s markery.
+
+---
+
 ## 13. Mapování akceptačního scénáře na fáze
 
 | Krok zadání | Fáze |
@@ -1251,9 +1279,9 @@ Nemění principy. Potvrzené a platné:
 
 ---
 
-## 16. Fáze 1
+## 16. Stav fází
 
-Kapitola 17 je uzavřená. Implementuje se Fáze 1.
+Kapitola 17 je uzavřená. Fáze 1–9 (MVP) jsou hotové. Fáze 10 (Poblíž na mapě) je hotová.
 
 ---
 
@@ -1265,7 +1293,7 @@ Stejný postup jako IphoneApp: připravit statickou složku, přetáhnout na [ap
 
 Rozdíl proti jazykové appce: na Netlify jde **jen prázdný app shell** (HTML/JS/manifest/service worker). `catalog.json` a `diary.json` se nahrávají v PWA ze souboru (Dropbox / USB), ne z hostingu.
 
-Skript `pripravit-deploy-netlify` vznikne až ve fázi 7.
+Skript `scripts/pripravit-deploy-netlify.ps1` postaví prázdný app shell do `deploy-netlify/`.
 
 ### 17.2 Administrace na jiném Windows PC — jeden zdroj pravdy
 

@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "catalog_version": 17,
+  "generated_at": "2026-08-14T20:30:00+02:00",
+  "attribution": {
+    "wikidata": "Wikidata contributors, CC0",
+    "npu_opendata": "Geoportál památkové péče, Národní památkový ústav, CC BY-SA 4.0",
+    "osm": "© OpenStreetMap contributors, ODbL",
+    "commons": "Licence u jednotlivých fotografií"
+  },
+  "places": [
+    {
+      "id": "0198f23a-5e5e-7b31-a8be-8c99507a2138",
+      "name": "Bouzov",
+      "short_name": null,
+      "alternative_names": ["Hrad Bouzov", "Státní hrad Bouzov"],
+      "types": ["CASTLE"],
+      "condition": "PRESERVED",
+      "visitability": "REGULAR",
+      "short_description": "Gotický hrad ze 14. století.",
+      "heritage_status": "NKP",
+      "unesco": false,
+      "location": {
+        "latitude": 49.704,
+        "longitude": 16.891,
+        "address": null,
+        "municipality": "Bouzov",
+        "district": "Olomouc",
+        "region": "Olomoucký kraj",
+        "country": "CZ"
+      },
+      "links": {
+        "official": "https://www.hrad-bouzov.cz/",
+        "wikipedia": "https://cs.wikipedia.org/wiki/Bouzov_(hrad)",
+        "wikidata": "https://www.wikidata.org/wiki/Q122922",
+        "heritage_catalog": "https://pamatkovykatalog.cz/uskp/17905",
+        "opening_hours": null,
+        "tickets": null
+      },
+      "image": {
+        "thumbnail_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Hrad_Bouzov.jpg?width=640",
+        "original_url": "https://commons.wikimedia.org/wiki/File:Hrad_Bouzov.jpg",
+        "attribution": "Jan Novák / Wikimedia Commons",
+        "license": "CC BY-SA 4.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/4.0/"
+      }
+    }
+  ]
+}

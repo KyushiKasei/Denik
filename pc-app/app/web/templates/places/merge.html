@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Sloučit {{ place.name }} — Památky{% endblock %}
+{% block content %}
+<h1>Sloučit s jiným místem</h1>
+<p>Toto místo <strong>{{ place.name }}</strong> zůstane. Jeho interní ID se nezmění.
+Druhé místo se archivuje, zdroje, typy a fotky se převedou sem. Prázdná pole se doplní z poraženého.</p>
+<p class="public-id">Vítězné ID: <code>{{ place.public_id }}</code></p>
+
+<form method="get" action="/places/{{ place.public_id }}/merge">
+  <label>Hledat místo ke sloučení
+    <input type="search" name="q" value="{{ q }}" placeholder="název, obec, interní ID">
+  </label>
+  <button type="submit">Hledat</button>
+</form>
+
+{% if not q %}
+<p class="muted">Bez hledání se nabízí místa se stejným normalizovaným názvem (typicky duplicita po importu).</p>
+{% endif %}
+
+{% if candidates %}
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th>Název</th>
+      <th>Obec</th>
+      <th>GPS</th>
+      <th>Interní ID</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for other in candidates %}
+    <tr>
+      <td><a href="/places/{{ other.public_id }}">{{ other.name }}</a></td>
+      <td>{{ other.municipality or "—" }}</td>
+      <td>{% if other.has_gps %}{{ other.latitude }}, {{ other.longitude }}{% else %}chybí{% endif %}</td>
+      <td><code>{{ other.public_id }}</code></td>
+      <td>
+        <form method="post" action="/places/{{ place.public_id }}/merge"
+              onsubmit="return confirm('Sloučit „{{ other.name }}“ do „{{ place.name }}“? Poražené místo se archivuje, toto interní ID zůstane.');">
+          <input type="hidden" name="loser_public_id" value="{{ other.public_id }}">
+          <button type="submit">Sloučit sem</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="muted">Žádný kandidát. Zkuste hledání názvem.</p>
+{% endif %}
+
+<p><a href="/places/{{ place.public_id }}">← Zpět na detail</a></p>
+{% endblock %}

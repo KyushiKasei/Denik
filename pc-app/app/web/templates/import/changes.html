@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Katalog vs zdroj — Památky{% endblock %}
+{% block content %}
+<h1>Hodnota v katalogu vs hodnota zdroje</h1>
+<p>Ruční oprava má přednost. Import katalog nepřepíše, dokud nezvolíte převzetí zdroje.</p>
+<p>
+  <a href="/import/changes?status=open">Otevřené</a>
+  ·
+  <a href="/import/changes?status=all">Vše</a>
+</p>
+
+{% if changes %}
+{% for change in changes %}
+<article class="review-card">
+  <h2>{{ field_labels.get(change.field_name, change.field_name) }}</h2>
+  <p>
+    Místo:
+    {% if change.place %}
+    <a href="/places/{{ change.place.public_id }}">{{ change.place.name }}</a>
+    {% else %}#{{ change.place_id }}{% endif %}
+    · {{ import_code_label("change_status", change.status) }}
+  </p>
+  <dl class="detail-grid">
+    <dt>Původní zdroj</dt><dd>{{ decode_value(change.old_source_value) }}</dd>
+    <dt>Nový zdroj</dt><dd>{{ decode_value(change.new_source_value) }}</dd>
+    <dt>V katalogu</dt><dd>{{ decode_value(change.master_value) }}</dd>
+  </dl>
+  {% if change.status == "open" %}
+  <div class="actions-row">
+    <form method="post" action="/import/changes/{{ change.id }}/keep">
+      <button type="submit">Ponechat hodnotu v katalogu</button>
+    </form>
+    <form method="post" action="/import/changes/{{ change.id }}/take">
+      <button type="submit" class="secondary">Převzít novou hodnotu</button>
+    </form>
+  </div>
+  {% endif %}
+</article>
+{% endfor %}
+{% else %}
+<p class="muted">Žádné rozdíly k rozhodnutí.</p>
+{% endif %}
+<p><a href="/import">← Import centrum</a></p>
+{% endblock %}

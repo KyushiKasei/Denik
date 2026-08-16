@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Návštěvy — Památky{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <h1>Návštěvy</h1>
+</div>
+<p class="muted">Chronologický seznam z deníku na tomto počítači. Smazané záznamy zůstávají v databázi, jen se nezobrazují.</p>
+
+<form class="filters" method="get" action="/visits"
+      hx-get="/visits"
+      hx-target="#visit-list"
+      hx-select="#visit-list"
+      hx-push-url="true"
+      hx-indicator="#visit-search-status"
+      hx-trigger="submit, change delay:200ms from:select, change from:input[type=checkbox], search delay:400ms from:input[name=q], change delay:200ms from:input[type=date]">
+  <label class="span-2">Hledání
+    <input type="search" name="q" value="{{ filters.q }}" placeholder="Název místa, obec, ID…">
+  </label>
+  <label>Od
+    <input type="date" name="date_from" value="{{ filters.date_from }}">
+  </label>
+  <label>Do
+    <input type="date" name="date_to" value="{{ filters.date_to }}">
+  </label>
+  <label>Hodnocení
+    <select name="rating">
+      <option value="">Vše</option>
+      {% for n in [1, 2, 3, 4, 5] %}
+      <option value="{{ n }}" {% if filters.rating == n %}selected{% endif %}>{{ n }} / 5</option>
+      {% endfor %}
+    </select>
+  </label>
+  <div class="check-row">
+    <label>
+      <input type="checkbox" name="deleted" value="1" {% if filters.include_deleted %}checked{% endif %}>
+      Včetně smazaných
+    </label>
+    <button type="submit" class="secondary">Filtrovat</button>
+    {% if filters.is_filtered() %}
+    <a href="/visits" role="button" class="secondary">Zrušit filtry</a>
+    {% endif %}
+    <span id="visit-search-status" class="htmx-indicator muted">Hledám…</span>
+  </div>
+</form>
+
+<div id="visit-list">
+  <p class="muted">
+    {% if result.total %}
+      {{ result.total }} návštěv{% if result.pages > 1 %}, strana {{ result.page }} / {{ result.pages }}{% endif %}
+    {% else %}
+      {% if filters.is_filtered() %}
+      Žádná návštěva nevyhovuje filtrům.
+      {% else %}
+      Zatím žádná návštěva. Přidejte ji u místa v katalogu.
+      {% endif %}
+    {% endif %}
+  </p>
+  {% if result.visits %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Datum</th>
+          <th>Místo</th>
+          <th>Hodnocení</th>
+          <th>Kdo tam byl</th>
+          <th>Poznámka</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for visit in result.visits %}
+        <tr>
+          <td>{{ visit.visited_at or "—" }}{% if visit.is_deleted %} <span class="badge badge-muted">smazáno</span>{% endif %}</td>
+          <td>
+            {% if visit.place %}
+            <a href="/places/{{ visit.place.public_id }}#denik">{{ visit.place.name }}</a>
+            {% else %}
+            <code>{{ visit.place_public_id }}</code>
+            <span class="muted">mimo katalog</span>
+            {% endif %}
+          </td>
+          <td>{% if visit.rating %}{{ visit.rating }} / 5{% else %}—{% endif %}</td>
+          <td>{{ visit.people | join(", ") if visit.people else "—" }}</td>
+          <td>{{ visit.note or "—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+  {% if result.pages > 1 %}
+  <nav class="pagination">
+    {% if result.page > 1 %}
+    <a href="/visits?{{ filters.query_string(result.page - 1) }}"
+       hx-get="/visits?{{ filters.query_string(result.page - 1) }}"
+       hx-target="#visit-list"
+       hx-select="#visit-list"
+       hx-push-url="true">← Předchozí</a>
+    {% else %}
+    <span></span>
+    {% endif %}
+    <span class="muted">Strana {{ result.page }} / {{ result.pages }}</span>
+    {% if result.page < result.pages %}
+    <a href="/visits?{{ filters.query_string(result.page + 1) }}"
+       hx-get="/visits?{{ filters.query_string(result.page + 1) }}"
+       hx-target="#visit-list"
+       hx-select="#visit-list"
+       hx-push-url="true">Další →</a>
+    {% else %}
+    <span></span>
+    {% endif %}
+  </nav>
+  {% endif %}
+</div>
+{% endblock %}

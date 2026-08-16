@@ -1,0 +1,23 @@
+<div id="import-job-state" hidden data-busy="{% if import_busy %}1{% else %}0{% endif %}"></div>
+{% if progress is defined and progress.show_banner %}
+<section class="import-progress {% if progress.running %}is-running{% endif %}" aria-live="polite">
+  <p class="import-progress-count">
+    <strong>{{ progress.current }} / {{ progress.total }}</strong>
+    {% if progress.total %}
+    <span class="muted">({{ progress.percent }} %)</span>
+    {% endif %}
+  </p>
+  <progress max="{{ progress.total if progress.total else 1 }}" value="{{ progress.current }}"></progress>
+  <p>{{ progress.message or "Import…" }}</p>
+  {% if progress.current_name %}
+  <p class="muted">Teď: {{ progress.current_name }}</p>
+  {% endif %}
+  {% if progress.running %}
+  <p class="muted">Nová / aktualizace / ke kontrole: {{ progress.created }} / {{ progress.updated }} / {{ progress.review }}.
+    {% if progress.kind == "preview" %}Jde o náhled, katalog se nemění.{% else %}Katalog se přepíše až na konci.{% endif %}
+  </p>
+  {% elif progress.status == "preview" %}
+  <p><a href="/import/preview-result">Zobrazit náhled</a></p>
+  {% endif %}
+</section>
+{% endif %}

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Běh {{ run.id }} — Import{% endblock %}
+{% block content %}
+<h1>Import č. {{ run.id }}</h1>
+<dl class="detail-grid">
+  <dt>Zdroj</dt><dd>{{ enum_label("source_types", run.source_type) }}</dd>
+  <dt>Stav</dt><dd>{{ import_code_label("run_status", run.status) }}</dd>
+  <dt>Začátek</dt><dd>{{ run.started_at }}</dd>
+  <dt>Konec</dt><dd>{{ run.finished_at or "—" }}</dd>
+  <dt>Záloha</dt><dd>{% if run.backup_path %}<code>{{ run.backup_path }}</code>{% else %}—{% endif %}</dd>
+  <dt>Přijato</dt><dd>{{ run.records_received }}</dd>
+  <dt>Nové / aktualizace / beze změny</dt>
+  <dd>{{ run.records_created }} / {{ run.records_updated }} / {{ run.records_unchanged }}</dd>
+  <dt>Ke kontrole / ignorováno / chyba</dt>
+  <dd>{{ run.records_review }} / {{ run.records_ignored }} / {{ run.records_failed }}</dd>
+</dl>
+
+{% if run.reviews %}
+<h2>Ke kontrole z tohoto běhu</h2>
+<ul>
+  {% for review in run.reviews %}
+  <li><a href="/import/reviews/{{ review.id }}">{{ enum_label("source_types", review.source_type) }} / {{ review.external_id or "—" }}</a> — {{ import_code_label("review_status", review.status) }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+{% if run.log %}
+<h2>Log</h2>
+<pre class="import-log">{{ run.log }}</pre>
+{% endif %}
+
+<p><a href="/import">← Import centrum</a></p>
+{% endblock %}

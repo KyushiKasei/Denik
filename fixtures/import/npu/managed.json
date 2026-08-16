@@ -1,0 +1,32 @@
+{
+  "records": [
+    {
+      "name": "Bouzov",
+      "slug": "hrad-bouzov.cz",
+      "wikidata": "Q122922",
+      "uskp": "19895/8-2468",
+      "types": ["CASTLE"],
+      "official_website": "https://www.hrad-bouzov.cz/",
+      "opening_hours_url": "https://www.hrad-bouzov.cz/cs/informace-pro-navstevniky/navstevni-doba",
+      "ticket_url": "https://www.hrad-bouzov.cz/cs/informace-pro-navstevniky/vstupne",
+      "visitability": "REGULAR",
+      "municipality": "Bouzov",
+      "district": "Olomouc",
+      "region": "Olomoucký kraj",
+      "latitude": 49.704167,
+      "longitude": 16.891111
+    },
+    {
+      "name": "Karlštejn",
+      "slug": "hrad-karlstejn.cz",
+      "wikidata": "Q214651",
+      "uskp": "11743/2-327",
+      "types": ["CASTLE"],
+      "official_website": "https://www.hrad-karlstejn.cz/",
+      "municipality": "Karlštejn",
+      "district": "Beroun",
+      "latitude": 49.93944,
+      "longitude": 14.18806
+    }
+  ]
+}

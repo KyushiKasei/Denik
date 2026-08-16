@@ -1,0 +1,11 @@
+<option value="">{{ with_count("Vše", visitability_counts|default(none)) }}</option>
+{% for group in visitability_filter_groups %}
+<option value="{{ group.code }}" {% if selected == group.code %}selected{% endif %}>{{ with_count(group.name_cs, visitability_counts|default(none), group.code) }}</option>
+{% endfor %}
+{% for group in visitability_form_groups %}
+<optgroup label="{{ group.label }}">
+  {% for item in group.options %}
+  <option value="{{ item.code }}" {% if selected == item.code %}selected{% endif %}>{{ with_count(item.name_cs, visitability_counts|default(none), item.code) }}</option>
+  {% endfor %}
+</optgroup>
+{% endfor %}

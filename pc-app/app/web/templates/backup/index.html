@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Záloha SQLite — Památky{% endblock %}
+{% block content %}
+<h1>Záloha a obnova</h1>
+<p>Celý katalog i deník na PC je jeden soubor SQLite. Záloha je kopie tohoto souboru. Obnova ho nahradí — včetně návštěv na PC.</p>
+<p class="muted">Živou databázi nenechávejte v Dropboxu ani OneDrive. Kopírujte jen při vypnuté aplikaci, nebo použijte tuto stránku.</p>
+<p>Databáze: <code>{{ db_path }}</code></p>
+
+{% if error %}
+<p class="error" role="alert">{{ error }}</p>
+{% endif %}
+
+<h2>Ruční záloha</h2>
+<p>Vznikne soubor ve složce <code>backups/</code> vedle databáze. Drží se posledních 20 záloh (včetně automatických před importem).</p>
+<form method="post" action="/backup/create">
+  <button type="submit">Vytvořit zálohu teď</button>
+</form>
+
+<h2>Obnovit z nahraného souboru</h2>
+<p>Nahraj <code>.sqlite3</code> z dřívější zálohy. Před obnovou se aktuální databáze sama zazálohuje.</p>
+<form method="post" action="/backup/restore-upload" enctype="multipart/form-data">
+  <label>Soubor zálohy
+    <input type="file" name="file" accept=".sqlite3,application/vnd.sqlite3,application/octet-stream" required>
+  </label>
+  <button type="submit" class="secondary"
+          onclick="return confirm('Nahradit aktuální databázi tímto souborem? Katalog i deník na PC se změní.');">
+    Obnovit z souboru
+  </button>
+</form>
+
+<h2>Uložené zálohy</h2>
+{% if backups %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Soubor</th>
+        <th>Čas</th>
+        <th>Velikost</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in backups %}
+      <tr>
+        <td><code>{{ item.name }}</code></td>
+        <td>{{ item.modified_iso }}</td>
+        <td>{{ (item.size_bytes / 1024) | round(1) }} KB</td>
+        <td>
+          <div class="actions-row">
+            <a href="/backup/files/{{ item.name }}">Stáhnout</a>
+            <form method="post" action="/backup/restore"
+                  onsubmit="return confirm('Nahradit aktuální databázi zálohou {{ item.name }}?');">
+              <input type="hidden" name="filename" value="{{ item.name }}">
+              <button type="submit" class="secondary">Obnovit</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="muted">Zatím žádná záloha. Vytvoří se automaticky před importem, nebo tlačítkem výše.</p>
+{% endif %}
+{% endblock %}

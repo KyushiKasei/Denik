@@ -3,92 +3,121 @@
 {% block content %}
 <div class="toolbar">
   <h1>Katalog</h1>
-  <a href="/places/new" role="button">Nové místo</a>
+  <div class="actions-row">
+    <form method="post" action="/catalog/export">
+      <button type="submit" class="secondary">Exportovat catalog.json</button>
+    </form>
+    <a href="/places/new" role="button">Nové místo</a>
+  </div>
 </div>
 
+<div id="catalog-body">
 <form class="filters" method="get" action="/places"
       hx-get="/places"
-      hx-target="#place-list"
-      hx-select="#place-list"
+      hx-target="#catalog-body"
+      hx-select="#catalog-body"
+      hx-swap="outerHTML"
       hx-push-url="true"
+      hx-indicator="#place-search-status"
       hx-trigger="submit, change delay:200ms from:select, change from:input[type=checkbox], search delay:400ms from:input[name=q]">
   <label class="span-2">Hledání
-    <input type="search" name="q" value="{{ filters.q }}" placeholder="Název, obec, kraj…">
+    <input type="search" name="q" id="places-q" value="{{ filters.q }}" placeholder="Název, obec, ID, Wikidata…"
+           hx-preserve="true">
   </label>
   <label>Typ
     <select name="type">
-      <option value="">Vše</option>
+      <option value="">{{ with_count("Vše", facet_counts.types) }}</option>
       {% for item in place_types %}
-      <option value="{{ item.code }}" {% if filters.type_code == item.code %}selected{% endif %}>{{ item.name_cs }}</option>
+      <option value="{{ item.code }}" {% if filters.type_code == item.code %}selected{% endif %}>{{ with_count(item.name_cs, facet_counts.types, item.code) }}</option>
       {% endfor %}
     </select>
   </label>
   <label>Kraj
     <select name="region">
-      <option value="">Vše</option>
+      <option value="">{{ with_count("Vše", facet_counts.regions) }}</option>
       {% for item in regions %}
-      <option value="{{ item }}" {% if filters.region == item %}selected{% endif %}>{{ item }}</option>
+      <option value="{{ item }}" {% if filters.region == item %}selected{% endif %}>{{ with_count(item, facet_counts.regions, item) }}</option>
       {% endfor %}
     </select>
   </label>
-  <label>Okres
-    <select name="district">
-      <option value="">Vše</option>
-      {% for item in districts %}
-      <option value="{{ item }}" {% if filters.district == item %}selected{% endif %}>{{ item }}</option>
-      {% endfor %}
+  <label>Deník
+    <select name="journal">
+      <option value="">{{ with_count("Vše", facet_counts.journal) }}</option>
+      <option value="visited" {% if filters.journal == "visited" %}selected{% endif %}>{{ with_count("Navštíveno", facet_counts.journal, "visited") }}</option>
+      <option value="not_visited" {% if filters.journal == "not_visited" %}selected{% endif %}>{{ with_count("Nenavštíveno", facet_counts.journal, "not_visited") }}</option>
+      <option value="want_to_visit" {% if filters.journal == "want_to_visit" %}selected{% endif %}>{{ with_count("Chci navštívit", facet_counts.journal, "want_to_visit") }}</option>
+      <option value="favorite" {% if filters.journal == "favorite" %}selected{% endif %}>{{ with_count("Oblíbené", facet_counts.journal, "favorite") }}</option>
     </select>
   </label>
-  <label>Obec
-    <select name="municipality">
-      <option value="">Vše</option>
-      {% for item in municipalities %}
-      <option value="{{ item }}" {% if filters.municipality == item %}selected{% endif %}>{{ item }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Stav
-    <select name="condition">
-      <option value="">Vše</option>
-      {% for item in conditions %}
-      <option value="{{ item.code }}" {% if filters.condition == item.code %}selected{% endif %}>{{ item.name_cs }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Přístupnost
-    <select name="visitability">
-      <option value="">Vše</option>
-      {% for item in visitabilities %}
-      <option value="{{ item.code }}" {% if filters.visitability == item.code %}selected{% endif %}>{{ item.name_cs }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Kvalita
-    <select name="quality_status">
-      <option value="">Vše</option>
-      {% for item in quality_statuses %}
-      <option value="{{ item.code }}" {% if filters.quality_status == item.code %}selected{% endif %}>{{ item.name_cs }}</option>
-      {% endfor %}
-    </select>
-  </label>
-  <label>Zobrazení
-    <select name="archived">
-      <option value="active" {% if filters.archived == "active" %}selected{% endif %}>Aktivní</option>
-      <option value="archived" {% if filters.archived == "archived" %}selected{% endif %}>Archiv</option>
-      <option value="all" {% if filters.archived == "all" %}selected{% endif %}>Vše</option>
-    </select>
-  </label>
-  <label>Řazení
-    <select name="sort">
-      {% for code, title in sort_choices.items() %}
-      <option value="{{ code }}" {% if filters.sort == code %}selected{% endif %}>{{ title }}</option>
-      {% endfor %}
-    </select>
-  </label>
+  {% set extra_n = filters.extra_count() %}
+  <details class="filter-extra"{% if extra_n %} open{% endif %}>
+    <summary>Další filtry{% if extra_n %} ({{ extra_n }}){% endif %}</summary>
+    <div class="filter-extra-grid">
+      <label>Okres
+        <select name="district">
+          <option value="">{{ with_count("Vše", facet_counts.districts) }}</option>
+          {% for item in districts %}
+          <option value="{{ item }}" {% if filters.district == item %}selected{% endif %}>{{ with_count(item, facet_counts.districts, item) }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Obec
+        <select name="municipality">
+          <option value="">{{ with_count("Vše", facet_counts.municipalities) }}</option>
+          {% for item in municipalities %}
+          <option value="{{ item }}" {% if filters.municipality == item %}selected{% endif %}>{{ with_count(item, facet_counts.municipalities, item) }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Stav
+        <select name="condition">
+          <option value="">{{ with_count("Vše", facet_counts.conditions) }}</option>
+          {% for item in conditions %}
+          <option value="{{ item.code }}" {% if filters.condition == item.code %}selected{% endif %}>{{ with_count(item.name_cs, facet_counts.conditions, item.code) }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Přístupnost
+        <select name="visitability">
+          {% with selected = filters.visitability, visitability_counts = facet_counts.visitability %}
+          {% include "places/_visitability_filter.html" %}
+          {% endwith %}
+        </select>
+      </label>
+      <label>Kvalita
+        <select name="quality_status">
+          <option value="">{{ with_count("Vše", facet_counts.quality) }}</option>
+          {% for item in quality_statuses %}
+          <option value="{{ item.code }}" {% if filters.quality_status == item.code %}selected{% endif %}>{{ with_count(item.name_cs, facet_counts.quality, item.code) }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Zobrazení
+        <select name="archived">
+          <option value="active" {% if filters.archived == "active" %}selected{% endif %}>{{ with_count("Aktivní", facet_counts.archived, "active") }}</option>
+          <option value="archived" {% if filters.archived == "archived" %}selected{% endif %}>{{ with_count("Archiv", facet_counts.archived, "archived") }}</option>
+          <option value="all" {% if filters.archived == "all" %}selected{% endif %}>{{ with_count("Vše", facet_counts.archived, "all") }}</option>
+        </select>
+      </label>
+      <label>Řazení
+        <select name="sort">
+          {% for code, title in sort_choices.items() %}
+          <option value="{{ code }}" {% if filters.sort == code %}selected{% endif %}>{{ title }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+    <div class="check-row">
+      <label><input type="checkbox" name="missing_gps" value="1" {% if filters.missing_gps %}checked{% endif %}> Chybějící GPS</label>
+      <label><input type="checkbox" name="missing_type" value="1" {% if filters.missing_type %}checked{% endif %}> Chybějící typ</label>
+    </div>
+  </details>
   <div class="check-row">
-    <label><input type="checkbox" name="missing_gps" value="1" {% if filters.missing_gps %}checked{% endif %}> Chybějící GPS</label>
-    <label><input type="checkbox" name="missing_type" value="1" {% if filters.missing_type %}checked{% endif %}> Chybějící typ</label>
     <button type="submit" class="secondary">Filtrovat</button>
+    {% if filters.is_filtered() %}
+    <a href="/places" role="button" class="secondary">Zrušit filtry</a>
+    {% endif %}
+    <span id="place-search-status" class="htmx-indicator muted">Hledám…</span>
   </div>
 </form>
 
@@ -97,7 +126,11 @@
     {% if result.total %}
       {{ result.total }} míst{% if result.pages > 1 %}, strana {{ result.page }} / {{ result.pages }}{% endif %}
     {% else %}
+      {% if catalog_empty %}
+      Katalog je prázdný. Založte místo, nebo ho naimportujte.
+      {% else %}
       Žádné místo nevyhovuje filtrům.
+      {% endif %}
     {% endif %}
   </p>
   {% if result.places %}
@@ -111,6 +144,7 @@
           <th>Okres</th>
           <th>Kraj</th>
           <th>Kvalita</th>
+          <th>Deník</th>
           <th>GPS</th>
         </tr>
       </thead>
@@ -126,6 +160,12 @@
           <td>{{ place.district or "—" }}</td>
           <td>{{ place.region or "—" }}</td>
           <td>{{ enum_label("quality_status", place.quality_status) }}</td>
+          <td>
+            {% if place.is_visited %}<span class="badge">navštíveno</span>{% endif %}
+            {% if place.wants_visit %}<span class="badge badge-want">chci</span>{% endif %}
+            {% if place.is_favorite %}<span class="badge badge-fav">oblíbené</span>{% endif %}
+            {% if not place.is_visited and not place.wants_visit and not place.is_favorite %}—{% endif %}
+          </td>
           <td>{% if place.has_gps %}ano{% else %}ne{% endif %}</td>
         </tr>
         {% endfor %}
@@ -140,7 +180,7 @@
        hx-get="/places?{{ filters.query_string(result.page - 1) }}"
        hx-target="#place-list"
        hx-select="#place-list"
-       hx-push-url="true">← Novější / předchozí</a>
+       hx-push-url="true">← Předchozí</a>
     {% else %}
     <span></span>
     {% endif %}
@@ -156,5 +196,6 @@
     {% endif %}
   </nav>
   {% endif %}
+</div>
 </div>
 {% endblock %}

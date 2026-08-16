@@ -1,0 +1,156 @@
+{
+  "CASTLE": {
+    "head": {
+      "vars": ["item", "itemLabel", "coord", "image", "web", "uskp", "article", "obecLabel", "okresLabel", "krajLabel"]
+    },
+    "results": {
+      "bindings": [
+        {
+          "item": { "type": "uri", "value": "http://www.wikidata.org/entity/Q122922" },
+          "itemLabel": { "xml:lang": "cs", "type": "literal", "value": "Bouzov" },
+          "coord": {
+            "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+            "type": "literal",
+            "value": "Point(16.891111 49.704167)"
+          },
+          "image": { "type": "uri", "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Hrad%20Bouzov.jpg" },
+          "web": { "type": "uri", "value": "https://www.hrad-bouzov.cz/" },
+          "uskp": { "type": "literal", "value": "19895/8-2468" },
+          "article": { "type": "uri", "value": "https://cs.wikipedia.org/wiki/Bouzov_(hrad)" },
+          "obecLabel": { "xml:lang": "cs", "type": "literal", "value": "Bouzov" },
+          "okresLabel": { "xml:lang": "cs", "type": "literal", "value": "okres Olomouc" },
+          "krajLabel": { "xml:lang": "cs", "type": "literal", "value": "Olomoucký kraj" }
+        },
+        {
+          "item": { "type": "uri", "value": "http://www.wikidata.org/entity/Q122922" },
+          "itemLabel": { "xml:lang": "cs", "type": "literal", "value": "Bouzov" },
+          "coord": {
+            "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+            "type": "literal",
+            "value": "Point(16.891111 49.704167)"
+          },
+          "image": { "type": "uri", "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Bouzov_Castle.jpg" },
+          "web": { "type": "uri", "value": "https://www.hrad-bouzov.cz/" },
+          "uskp": { "type": "literal", "value": "19895/8-2468" },
+          "article": { "type": "uri", "value": "https://cs.wikipedia.org/wiki/Bouzov_(hrad)" },
+          "obecLabel": { "xml:lang": "cs", "type": "literal", "value": "Bouzov" },
+          "okresLabel": { "xml:lang": "cs", "type": "literal", "value": "okres Olomouc" },
+          "krajLabel": { "xml:lang": "cs", "type": "literal", "value": "Olomoucký kraj" }
+        },
+        {
+          "item": { "type": "uri", "value": "http://www.wikidata.org/entity/Q214651" },
+          "itemLabel": { "xml:lang": "cs", "type": "literal", "value": "Karlštejn" },
+          "coord": {
+            "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+            "type": "literal",
+            "value": "<http://www.opengis.net/def/crs/EPSG/0/4326> Point(14.18806 49.93944)"
+          },
+          "web": { "type": "uri", "value": "https://www.hrad-karlstejn.cz/" },
+          "article": { "type": "uri", "value": "https://cs.wikipedia.org/wiki/Karl%C5%A1tejn_(hrad)" },
+          "obecLabel": { "xml:lang": "cs", "type": "literal", "value": "Karlštejn" },
+          "okresLabel": { "xml:lang": "cs", "type": "literal", "value": "okres Beroun" },
+          "krajLabel": { "xml:lang": "cs", "type": "literal", "value": "Středočeský kraj" }
+        },
+        {
+          "item": { "type": "uri", "value": "http://www.wikidata.org/entity/Q1010040" },
+          "itemLabel": { "xml:lang": "cs", "type": "literal", "value": "Bečov nad Teplou" },
+          "coord": {
+            "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+            "type": "literal",
+            "value": "Point(12.838 50.085)"
+          },
+          "obecLabel": { "xml:lang": "cs", "type": "literal", "value": "Bečov nad Teplou" },
+          "okresLabel": { "xml:lang": "cs", "type": "literal", "value": "okres Karlovy Vary" },
+          "krajLabel": { "xml:lang": "cs", "type": "literal", "value": "Karlovarský kraj" }
+        },
+        {
+          "item": { "type": "uri", "value": "http://www.wikidata.org/entity/Q999000001" },
+          "itemLabel": { "xml:lang": "cs", "type": "literal", "value": "Hrad Bezsouřadnic" },
+          "obecLabel": { "xml:lang": "cs", "type": "literal", "value": "Neznámá" }
+        }
+      ]
+    }
+  },
+  "CHATEAU": {
+    "head": {
+      "vars": ["item", "itemLabel", "coord", "image", "web", "uskp", "article", "obecLabel", "okresLabel", "krajLabel"]
+    },
+    "results": {
+      "bindings": [
+        {
+          "item": { "type": "uri", "value": "http://www.wikidata.org/entity/Q1010040" },
+          "itemLabel": { "xml:lang": "cs", "type": "literal", "value": "Bečov nad Teplou" },
+          "coord": {
+            "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+            "type": "literal",
+            "value": "Point(12.838 50.085)"
+          },
+          "obecLabel": { "xml:lang": "cs", "type": "literal", "value": "Bečov nad Teplou" },
+          "okresLabel": { "xml:lang": "cs", "type": "literal", "value": "okres Karlovy Vary" },
+          "krajLabel": { "xml:lang": "cs", "type": "literal", "value": "Karlovarský kraj" }
+        }
+      ]
+    }
+  },
+  "RUIN": {
+    "head": {
+      "vars": ["item", "itemLabel", "coord", "image", "web", "uskp", "article", "obecLabel", "okresLabel", "krajLabel"]
+    },
+    "results": {
+      "bindings": [
+        {
+          "item": { "type": "uri", "value": "http://www.wikidata.org/entity/Q999000002" },
+          "itemLabel": { "xml:lang": "cs", "type": "literal", "value": "Zřícenina Testhrad" },
+          "coord": {
+            "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+            "type": "literal",
+            "value": "Point(15.5 49.5)"
+          }
+        }
+      ]
+    }
+  },
+  "MANOR": {
+    "head": {
+      "vars": ["item", "itemLabel", "coord", "image", "web", "uskp", "article", "obecLabel", "okresLabel", "krajLabel"]
+    },
+    "results": {
+      "bindings": [
+        {
+          "item": { "type": "uri", "value": "http://www.wikidata.org/entity/Q999000003" },
+          "itemLabel": { "xml:lang": "cs", "type": "literal", "value": "Tvrz Testovice" },
+          "coord": {
+            "datatype": "http://www.opengis.net/ont/geosparql#wktLiteral",
+            "type": "literal",
+            "value": "Point(14.2 50.1)"
+          },
+          "uskp": { "type": "literal", "value": "12345/1-0000" }
+        }
+      ]
+    }
+  },
+  "LOOKOUT_TOWER": {
+    "head": {
+      "vars": ["item", "itemLabel", "coord", "image", "web", "uskp", "article", "obecLabel", "okresLabel", "krajLabel"]
+    },
+    "results": {
+      "bindings": []
+    }
+  },
+  "ZOO": {
+    "head": {
+      "vars": ["item", "itemLabel", "coord", "image", "web", "uskp", "article", "obecLabel", "okresLabel", "krajLabel"]
+    },
+    "results": {
+      "bindings": []
+    }
+  },
+  "CAVE": {
+    "head": {
+      "vars": ["item", "itemLabel", "coord", "image", "web", "uskp", "article", "obecLabel", "okresLabel", "krajLabel"]
+    },
+    "results": {
+      "bindings": []
+    }
+  }
+}

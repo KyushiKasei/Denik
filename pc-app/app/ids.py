@@ -1,4 +1,4 @@
-"""Stabilní UUIDv7 pro Place.public_id a později Visit.public_id."""
+"""Stabilní UUIDv7 pro Place.public_id a Visit.public_id."""
 
 from __future__ import annotations
 

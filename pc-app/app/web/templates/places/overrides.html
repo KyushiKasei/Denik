@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Ochrana polí — {{ place.name }}{% endblock %}
+{% block content %}
+<h1>Katalog vs zdroj: {{ place.name }}</h1>
+<p class="public-id">Interní ID (neměnné): <code>{{ place.public_id }}</code></p>
+
+<h2>Ruční ochrany (override)</h2>
+{% if place.field_overrides %}
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th>Pole</th>
+      <th>Hodnota v katalogu</th>
+      <th>Poznámka</th>
+      <th>Upraveno</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in place.field_overrides %}
+    <tr>
+      <td>{{ field_labels.get(row.field_name, row.field_name) }}</td>
+      <td>{{ decode_value(row.value_json) }}</td>
+      <td>{{ row.note or "—" }}</td>
+      <td>{{ row.updated_at }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="muted">Žádné ruční ochrany. Úprava v katalogu je zapíše.</p>
+{% endif %}
+
+<h2>Hodnoty ze zdrojů</h2>
+<p class="muted">Karty níže už patří k <strong>tomuto</strong> místu. Nejsou to kandidáti ke sloučení.
+Duplicitu v katalogu sloučíte z detailu („Sloučit s jiným“) nebo v <a href="/import/reviews">importní frontě</a>.</p>
+{% if place.sources %}
+{% for source in place.sources %}
+{% set page_url = source_page_url(source) %}
+<article class="review-card">
+  <h3>{{ source.source_type }} {% if source.external_id %}<code>{{ source.external_id }}</code>{% endif %}</h3>
+  <p class="muted">
+    {% if page_url %}<a href="{{ page_url }}" target="_blank" rel="noopener">{{ page_url }}</a>{% endif %}
+    {% if page_url and source.fetched_at %} · {% endif %}
+    {{ source.fetched_at or "" }}
+  </p>
+  {% if source.values %}
+  <dl class="detail-grid">
+    {% for value in source.values %}
+    {% set decoded = decode_value(value.value_json) %}
+    <dt>{{ field_labels.get(value.field_name, value.field_name) }}</dt>
+    <dd>
+      {% if is_http_url(decoded) %}
+        <a href="{{ decoded }}" target="_blank" rel="noopener">{{ decoded }}</a>
+      {% else %}
+        {{ decoded }}
+      {% endif %}
+    </dd>
+    {% endfor %}
+  </dl>
+  {% endif %}
+</article>
+{% endfor %}
+{% else %}
+<p class="muted">Žádný připojený zdroj.</p>
+{% endif %}
+
+<h2>Zdroj změnil hodnotu</h2>
+{% set open_changes = changes | selectattr("status", "equalto", "open") | list %}
+{% if open_changes %}
+{% for change in open_changes %}
+<article class="review-card">
+  <h3>{{ field_labels.get(change.field_name, change.field_name) }}</h3>
+  <dl class="detail-grid">
+    <dt>Původní zdroj</dt><dd>{{ decode_value(change.old_source_value) }}</dd>
+    <dt>Nový zdroj</dt><dd>{{ decode_value(change.new_source_value) }}</dd>
+    <dt>V katalogu</dt><dd>{{ decode_value(change.master_value) }}</dd>
+  </dl>
+  <div class="actions-row">
+    <form method="post" action="/import/changes/{{ change.id }}/keep">
+      <button type="submit">Ponechat hodnotu v katalogu</button>
+    </form>
+    <form method="post" action="/import/changes/{{ change.id }}/take">
+      <button type="submit" class="secondary">Převzít novou hodnotu</button>
+    </form>
+  </div>
+</article>
+{% endfor %}
+{% else %}
+<p class="muted">Žádný otevřený rozdíl.</p>
+{% endif %}
+
+<p><a href="/places/{{ place.public_id }}">← Zpět na detail</a></p>
+{% endblock %}
