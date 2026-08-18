@@ -1,6 +1,7 @@
 import type { CatalogPlace, PlaceNameSnapshot, StoredPlaceState, StoredVisit } from "../catalog/types";
+import { fold } from "../text/fold";
 
-export type DiarySection = "visits" | "want" | "fav" | "trips";
+export type DiarySection = "passport" | "visits" | "want" | "fav" | "trips";
 
 export interface DiaryPlaceRef {
   place_id: string;
@@ -25,7 +26,7 @@ export interface DiaryHeaderStats {
 const MISSING_NAME = "Místo už není v katalogu";
 
 export function isDiarySection(value: string | null): value is DiarySection {
-  return value === "visits" || value === "want" || value === "fav" || value === "trips";
+  return value === "passport" || value === "visits" || value === "want" || value === "fav" || value === "trips";
 }
 
 export function formatVisitDate(visitedAt: string | null): string {
@@ -37,6 +38,32 @@ export function formatVisitDate(visitedAt: string | null): string {
     return visitedAt;
   }
   return `${Number(match[3])}. ${Number(match[2])}. ${match[1]}`;
+}
+
+export function formatDateTime(iso: string | null | undefined): string {
+  if (!iso) {
+    return "—";
+  }
+  const date = formatVisitDate(iso);
+  const time = /T(\d{2}):(\d{2})/.exec(iso);
+  if (!time) {
+    return date;
+  }
+  return `${date} ${Number(time[1])}:${time[2]}`;
+}
+
+export function defaultTripName(day: string): string {
+  return `Výlet ${formatVisitDate(day)}`;
+}
+
+export function municipalityLine(name: string, municipality: string | null): string {
+  if (!municipality) {
+    return "";
+  }
+  if (fold(municipality) === fold(name)) {
+    return "";
+  }
+  return municipality;
 }
 
 export function formatStars(rating: number | null): string {

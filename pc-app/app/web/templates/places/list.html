@@ -19,7 +19,20 @@
       hx-swap="outerHTML"
       hx-push-url="true"
       hx-indicator="#place-search-status"
-      hx-trigger="submit, change delay:200ms from:select, change from:input[type=checkbox], search delay:400ms from:input[name=q]">
+      hx-trigger="submit, change delay:200ms from:select, change from:input[type=checkbox], change from:input[name=worth], search delay:400ms from:input[name=q]">
+  <div class="worth-toggle" role="group" aria-label="Za návštěvu">
+    <label class="{% if filters.worth %}active{% endif %}">
+      <input type="radio" name="worth" value="visit" {% if filters.worth %}checked{% endif %}>
+      Za návštěvu ({{ facet_counts.worth.visit }})
+    </label>
+    <label class="{% if not filters.worth %}active{% endif %}">
+      <input type="radio" name="worth" value="all" {% if not filters.worth %}checked{% endif %}>
+      Vše ({{ facet_counts.worth.all }})
+    </label>
+  </div>
+  {% if filters.ruin_union %}
+  <input type="hidden" name="ruin" value="1">
+  {% endif %}
   <label class="span-2">Hledání
     <input type="search" name="q" id="places-q" value="{{ filters.q }}" placeholder="Název, obec, ID, Wikidata…"
            hx-preserve="true">
@@ -122,6 +135,9 @@
 </form>
 
 <div id="place-list">
+  {% if filters.ruin_union %}
+  <p class="muted">Jen zříceniny (typ nebo stav), stejně jako kolekce Dnes v PWA.</p>
+  {% endif %}
   <p class="muted">
     {% if result.total %}
       {{ result.total }} míst{% if result.pages > 1 %}, strana {{ result.page }} / {{ result.pages }}{% endif %}
@@ -152,8 +168,18 @@
         {% for place in result.places %}
         <tr>
           <td>
-            <a href="/places/{{ place.public_id }}">{{ place.name }}</a>
-            {% if place.is_archived %}<span class="badge badge-muted">Archiv</span>{% endif %}
+            <span class="place-list-name">
+              {% set list_photo_url = photo_display_url(place.primary_photo) %}
+              {% if list_photo_url %}
+              <img src="{{ list_photo_url }}" alt="" class="place-list-thumb">
+              {% else %}
+              <span class="place-list-thumb is-empty" aria-hidden="true"></span>
+              {% endif %}
+              <span>
+                <a href="/places/{{ place.public_id }}">{{ place.name | display_place_name }}</a>
+                {% if place.is_archived %}<span class="badge badge-muted">Archiv</span>{% endif %}
+              </span>
+            </span>
           </td>
           <td>{{ place.types_cs }}</td>
           <td>{{ place.municipality or "—" }}</td>

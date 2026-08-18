@@ -55,6 +55,7 @@ class DiaryImportResult:
     unknown_place_ids: list[str] = field(default_factory=list)
     backup_path: Path | None = None
     warnings: list[str] = field(default_factory=list)
+    family_collapsed: int = 0
 
 
 @dataclass(frozen=True)
@@ -72,9 +73,12 @@ def parse_timestamp(value: str | None) -> datetime | None:
     if text.endswith("Z"):
         text = text[:-1] + "+00:00"
     try:
-        return datetime.fromisoformat(text)
+        parsed = datetime.fromisoformat(text)
     except ValueError:
         return None
+    if parsed.tzinfo is None:
+        return parsed.astimezone()
+    return parsed
 
 
 def incoming_is_newer(incoming_at: str | None, local_at: str | None) -> tuple[bool, bool]:
@@ -181,6 +185,7 @@ def _visit_payload_equal(visit: Visit, item: dict[str, Any]) -> bool:
         and visit.rating == item.get("rating")
         and visit.people == (item.get("people") or [])
         and (visit.note or None) == (item.get("note") or None)
+        and (visit.trip_public_id or None) == (item.get("trip_id") or None)
         and (visit.deleted_at or None) == (item.get("deleted_at") or None)
         and visit.created_at == item.get("created_at")
         and visit.updated_at == item.get("updated_at")
@@ -194,6 +199,8 @@ def _apply_visit_fields(visit: Visit, item: dict[str, Any], place: Place | None)
     visit.rating = item.get("rating")
     visit.people_json = _people_json(item.get("people"))
     visit.note = item.get("note")
+    trip_id = item.get("trip_id")
+    visit.trip_public_id = str(trip_id) if trip_id else None
     visit.created_at = str(item["created_at"])
     visit.updated_at = str(item["updated_at"])
     visit.deleted_at = item.get("deleted_at")
@@ -290,6 +297,36 @@ def _merge_state(session: Session, item: dict[str, Any], result: DiaryImportResu
     result.states_updated += 1
 
 
+def _merge_state_family(session: Session, item: dict[str, Any], result: DiaryImportResult) -> None:
+    """Rodina: chci/oblíbené se sčítají, poznámky se spojí. Jinak stejné ID pravidlo."""
+    from app.services.family_merge import family_or_state
+
+    place_public_id = str(item["place_id"])
+    place = _place_by_public_id(session, place_public_id)
+    if place is None:
+        if place_public_id not in result.unknown_place_ids:
+            result.unknown_place_ids.append(place_public_id)
+        _open_issue(session, place_public_id, None)
+
+    local = session.scalar(
+        select(PlaceJournalState).where(PlaceJournalState.place_public_id == place_public_id)
+    )
+    if local is None:
+        state = PlaceJournalState(place_public_id=place_public_id)
+        _apply_state_fields(state, item, place)
+        session.add(state)
+        result.states_inserted += 1
+        return
+    if local.deleted_at and not item.get("deleted_at"):
+        _apply_state_fields(local, item, place)
+        result.states_updated += 1
+        return
+    family_or_state(local, item)
+    if place is not None:
+        local.place_id = place.id
+    result.states_updated += 1
+
+
 def _origin_tuple(item: dict[str, Any]) -> tuple[float | None, float | None, str | None]:
     origin = item.get("origin")
     if not isinstance(origin, dict):
@@ -331,6 +368,7 @@ def _trip_payload_equal(trip: Trip, item: dict[str, Any]) -> bool:
         and trip.origin_longitude == lon
         and (trip.origin_label or None) == label
         and (trip.notes or None) == (item.get("notes") or None)
+        and (trip.status or "planned") == (item.get("status") or "planned")
         and (trip.deleted_at or None) == (item.get("deleted_at") or None)
         and trip.created_at == item.get("created_at")
         and trip.updated_at == item.get("updated_at")
@@ -365,6 +403,8 @@ def _apply_trip_fields(session: Session, trip: Trip, item: dict[str, Any], resul
     trip.origin_longitude = lon
     trip.origin_label = label
     trip.notes = item.get("notes")
+    status = str(item.get("status") or "planned").strip()
+    trip.status = status if status in {"planned", "partial", "done"} else "planned"
     trip.created_at = str(item["created_at"])
     trip.updated_at = str(item["updated_at"])
     trip.deleted_at = item.get("deleted_at")
@@ -398,7 +438,13 @@ def _merge_trip(session: Session, item: dict[str, Any], result: DiaryImportResul
     result.trips_updated += 1
 
 
-def import_diary(session: Session, data: dict[str, Any], *, make_backup: bool = True) -> DiaryImportResult:
+def import_diary(
+    session: Session,
+    data: dict[str, Any],
+    *,
+    make_backup: bool = True,
+    family: bool = False,
+) -> DiaryImportResult:
     """Idempotentní sloučení. Neznámé place_id uloží návštěvu, nevytvoří Place."""
     validate_diary(data)
     result = DiaryImportResult()
@@ -412,10 +458,18 @@ def import_diary(session: Session, data: dict[str, Any], *, make_backup: bool = 
             _merge_visit(session, item, result)
     for item in data.get("place_states") or []:
         if isinstance(item, dict):
-            _merge_state(session, item, result)
+            if family:
+                _merge_state_family(session, item, result)
+            else:
+                _merge_state(session, item, result)
     for item in data.get("trips") or []:
         if isinstance(item, dict):
             _merge_trip(session, item, result)
+
+    if family:
+        from app.services.family_merge import collapse_family_visits
+
+        result.family_collapsed = collapse_family_visits(session)
 
     _set_meta(session, META_DIARY_IMPORT_AT, now_iso())
     session.commit()
@@ -443,6 +497,7 @@ def visit_to_json(visit: Visit) -> dict[str, Any]:
         "rating": visit.rating,
         "people": visit.people,
         "note": visit.note,
+        "trip_id": visit.trip_public_id,
         "created_at": visit.created_at,
         "updated_at": visit.updated_at,
         "deleted_at": visit.deleted_at,
@@ -476,6 +531,7 @@ def trip_to_json(trip: Trip) -> dict[str, Any]:
             else None
         ),
         "notes": trip.notes,
+        "status": trip.status or "planned",
         "stops": [
             {
                 "place_id": stop.place_public_id,
@@ -524,6 +580,16 @@ def export_diary(session: Session, path: Path | None = None) -> DiaryExportResul
         state_count=len(diary["place_states"]),
         diary=diary,
     )
+
+
+def export_diary_zip(session: Session) -> bytes:
+    from app.services.diary_bundle import build_diary_zip
+
+    diary = build_diary(session, exported_from="pc")
+    payload = build_diary_zip(diary)
+    _set_meta(session, META_DIARY_EXPORT_AT, diary["exported_at"])
+    session.commit()
+    return payload
 
 
 def diary_export_status(session: Session) -> dict[str, Any]:

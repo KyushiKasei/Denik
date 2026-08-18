@@ -11,7 +11,7 @@ from app.config import REPO_ROOT, get_default_catalog_path
 from app.db.models import Place, PlacePhoto, PlaceSource
 from app.importers.fixture import DEFAULT_FIXTURE, load_fixture
 from app.services.apply_import import apply_import
-from app.services.catalog_export import export_catalog, place_to_catalog_item
+from app.services.catalog_export import export_catalog, place_to_catalog_item, public_short_description
 from app.services.catalog_schema import CatalogSchemaError, load_and_validate_catalog, validate_catalog
 from app.services.places import PlaceInput, archive_place, create_place
 
@@ -75,6 +75,31 @@ def test_export_validates_against_schema(session: Session, tmp_path: Path) -> No
     assert loaded["schema_version"] == 1
     assert loaded["places"][0]["id"] == place.public_id
     assert loaded["places"][0]["unesco"] is False
+    assert loaded["places"][0]["osm_opening_hours"] is None
+    assert loaded["places"][0]["phone"] is None
+    assert loaded["places"][0]["fee"] is None
+
+
+def test_export_includes_optional_visit_extras(session: Session, tmp_path: Path) -> None:
+    place = create_place(
+        session,
+        _place_input(
+            dogs="leashed",
+            payment="cash",
+            amenities=["toilets", "cafe"],
+            inception_year=1310,
+            architectural_style="gotika",
+        ),
+    )
+    result = export_catalog(session, tmp_path / "catalog.json")
+    validate_catalog(result.catalog)
+    item = result.catalog["places"][0]
+    assert item["id"] == place.public_id
+    assert item["dogs"] == "leashed"
+    assert item["payment"] == "cash"
+    assert item["amenities"] == ["toilets", "cafe"]
+    assert item["inception_year"] == 1310
+    assert item["architectural_style"] == "gotika"
 
 
 def test_invalid_catalog_is_rejected(tmp_path: Path) -> None:
@@ -250,3 +275,9 @@ def test_cli_import_source_wikidata(client, monkeypatch) -> None:
         assert session.scalar(select(Place).where(Place.name == "Bouzov")) is not None
     finally:
         session.close()
+
+
+def test_review_note_is_not_exported() -> None:
+    assert public_short_description("Nejasný záznam blízko Karlštejna pro review.") is None
+    assert public_short_description("Gotický hrad.") == "Gotický hrad."
+    assert public_short_description("  ") is None

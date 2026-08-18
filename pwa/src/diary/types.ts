@@ -17,12 +17,15 @@ export interface StoredTripStop {
   note: string | null;
 }
 
+export type TripStatus = "planned" | "partial" | "done";
+
 export interface StoredTrip {
   id: string;
   name: string;
   planned_on: string | null;
   origin: TripOrigin | null;
   notes: string | null;
+  status?: TripStatus;
   stops: StoredTripStop[];
   created_at: string;
   updated_at: string;
@@ -48,6 +51,7 @@ export interface DiaryMergeCounts {
   tripsInserted: number;
   tripsUpdated: number;
   tripsUnchanged: number;
+  familyCollapsed?: number;
   warnings: string[];
 }
 
@@ -62,3 +66,12 @@ export interface DiaryMeta {
   last_import_at: string | null;
   visits_at_last_export: number;
 }
+
+export interface StoredVisitPhoto {
+  id: string;
+  visit_id: string;
+  mime: string;
+  blob: Blob;
+  created_at: string;
+}
+

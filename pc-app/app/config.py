@@ -8,6 +8,7 @@ from pathlib import Path
 
 APP_NAME = "PamatkyDenik"
 DEFAULT_PORT = 8765
+DEFAULT_LAN_PORT = 8766
 
 _PACKAGE_DIR = Path(__file__).resolve().parent
 PC_APP_DIR = _PACKAGE_DIR.parent
@@ -56,6 +57,10 @@ def get_default_diary_path() -> Path:
     return get_export_dir() / "diary.json"
 
 
+def get_visit_photos_dir() -> Path:
+    return get_data_dir() / "visit_photos"
+
+
 def catalog_schema_path() -> Path:
     return REPO_ROOT / "shared" / "schemas" / "catalog.schema.json"
 
@@ -70,4 +75,5 @@ def ensure_data_dir() -> Path:
     (data_dir / "backups").mkdir(exist_ok=True)
     (data_dir / "logs").mkdir(exist_ok=True)
     get_export_dir().mkdir(exist_ok=True)
+    get_visit_photos_dir().mkdir(exist_ok=True)
     return data_dir

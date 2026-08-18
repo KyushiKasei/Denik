@@ -4,6 +4,7 @@ import { db } from "../src/db";
 import {
   diaryExportReminder,
   dismissExportReminder,
+  EXPORT_REMINDER_DAYS,
   EXPORT_REMINDER_DISMISS_KEY,
 } from "../src/diary/reminder";
 import type { StoredVisit } from "../src/catalog/types";
@@ -40,6 +41,13 @@ test("5 nových návštěv bez exportu zapne připomínku", async () => {
   expect(info.show).toBe(true);
   expect(info.neverExported).toBe(true);
   expect(info.newVisits).toBe(5);
+});
+
+test("mezery v created_at nepřekazí výpočet dnů", async () => {
+  await db.visits.bulkPut([visit("0198f93b-618d-762f-a589-ccf375139de0", " 2026-01-01T12:00:00+02:00 ")]);
+  const info = await diaryExportReminder();
+  expect(info.show).toBe(true);
+  expect(info.daysSinceExport).toBeGreaterThanOrEqual(EXPORT_REMINDER_DAYS);
 });
 
 test("odložení připomínky se uloží a schová banner", async () => {

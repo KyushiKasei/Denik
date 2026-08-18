@@ -63,6 +63,7 @@ Soubor master katalogu. Osobní deník v něm není. Archivovaná místa se neex
         "opening_hours": null,
         "tickets": null
       },
+      "osm_opening_hours": "Mo-Su 09:00-16:00",
       "image": {
         "thumbnail_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Hrad_Bouzov.jpg?width=640",
         "original_url": "https://commons.wikimedia.org/wiki/File:Hrad_Bouzov.jpg",
@@ -74,6 +75,8 @@ Soubor master katalogu. Osobní deník v něm není. Archivovaná místa se neex
   ]
 }
 ```
+
+`osm_opening_hours` může chybět u starších souborů. Volitelně: `phone`, `fee`, `wheelchair`, `parking`, `visit_duration_minutes`, `last_entry`, `dogs`, `payment`, `amenities` (`toilets` / `cafe` / `playground`), `inception_year`, `architectural_style`.
 
 `image` může být `null`. Souřadnice mohou být `null` — PWA místo zařadí do seznamu, ne na mapu. Hradozámek = `types: ["CASTLE", "CHATEAU"]`, kód `CASTLE_CHATEAU` neexistuje.
 
@@ -104,7 +107,7 @@ PC export: tlačítko na přehledu / v katalogu, nebo `python -m app.cli export-
 
 Oddělený soubor. Katalog v něm není. Přenos deníku je vždy sloučení podle ID, ne náhrada celého deníku.
 
-Import přijímá `schema_version` 1 i 2. Verze 1 pole `trips` nemá — chybějící pole se bere jako prázdný seznam a **nesmaže** výlety, které už v cíli jsou. Export po této fázi je vždy verze 2 a pole `trips` obsahuje (i prázdné).
+Import přijímá `schema_version` 1 i 2. Verze 1 pole `trips` nemá — chybějící pole se bere jako prázdný seznam a **nesmaže** výlety, které už v cíli jsou. Export po této fázi je vždy verze 2 a pole `trips` obsahuje (i prázdné). Volitelně `visits[].trip_id` a `trips[].status` (`planned` / `partial` / `done`).
 
 ### Příklad (verze 2)
 
@@ -179,6 +182,8 @@ Pro každou návštěvu podle `visits[].id`:
 
 Stejné pravidlo pro `place_states` podle `place_id` a pro `trips` podle `trips[].id`. Při shodném `updated_at` vyhraje příchozí soubor a zapíše se varování.
 
+Volitelně **rodinné sloučení** (PC i PWA): po běžném merge se návštěvy se stejným `place_id` a `visited_at` sbalí do jednoho razítka. Wishlist/oblíbené se sjednotí OR, poznámky se spojí.
+
 Neznámé `place_id` v `trips[].stops[]` výlet nesmaže a Place nezakládá (stejně jako osiřelá návštěva).
 
 Nikdy:
@@ -190,4 +195,4 @@ Nikdy:
 Neznámé `place_id`: návštěvu i zastávku uložit, zařadit issue, v UI „neznámé místo“ / „místo už není v katalogu“. Stejný soubor dvakrát = nula nových návštěv i výletů.
 
 PC: přehled (`/`), `/trips`, nebo `python -m app.cli export-diary` / `import-diary`.  
-PWA: stránka Soubory.
+PWA: stránka Nastavení. Doma na stejné Wi-Fi lze stejné soubory podat přes Safari na `http://<IP-PC>:8766/lan` (PIN z přehledu PC).

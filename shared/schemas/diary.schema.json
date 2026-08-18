@@ -124,6 +124,13 @@
           "items": { "type": "string", "minLength": 1 }
         },
         "note": { "$ref": "#/$defs/stringOrNull" },
+        "trip_id": {
+          "anyOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/uuid" }
+          ],
+          "description": "Volitelné Trip.public_id. Starší deníky pole nemají."
+        },
         "created_at": { "type": "string", "format": "date-time" },
         "updated_at": { "type": "string", "format": "date-time" },
         "deleted_at": { "$ref": "#/$defs/dateTimeOrNull" }
@@ -180,6 +187,10 @@
           ]
         },
         "notes": { "$ref": "#/$defs/stringOrNull" },
+        "status": {
+          "type": "string",
+          "enum": ["planned", "partial", "done"]
+        },
         "stops": {
           "type": "array",
           "items": { "$ref": "#/$defs/tripStop" }

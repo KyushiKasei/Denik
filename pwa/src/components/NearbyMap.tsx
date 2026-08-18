@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Circle, CircleMarker, MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
+import { Circle, CircleMarker, MapContainer, Marker, Polyline, Popup, TileLayer, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Link } from "react-router-dom";
@@ -7,11 +7,30 @@ import type { NearbyHit } from "../geo/nearby";
 import type { GeoOrigin } from "../geo/origin";
 import { OSM_TILE_ATTRIBUTION, OSM_TILE_URL } from "../geo/tileStatus";
 import "../map/leafletIcon";
+import { StampButton } from "./StampButton";
 
 export interface LiveGpsPosition {
   latitude: number;
   longitude: number;
   accuracy: number | null;
+}
+
+function FitCorridor({ origin, dest }: { origin: GeoOrigin; dest: GeoOrigin }) {
+  const map = useMap();
+  useEffect(() => {
+    const bounds = L.latLngBounds(
+      [origin.latitude, origin.longitude],
+      [dest.latitude, dest.longitude],
+    );
+    const layout = () => {
+      map.invalidateSize();
+      map.fitBounds(bounds, { padding: [28, 28], maxZoom: 12 });
+    };
+    layout();
+    const timer = window.setTimeout(layout, 80);
+    return () => window.clearTimeout(timer);
+  }, [map, origin.latitude, origin.longitude, dest.latitude, dest.longitude]);
+  return null;
 }
 
 function FitView({ origin, radiusKm }: { origin: GeoOrigin; radiusKm: number }) {
@@ -60,6 +79,9 @@ interface NearbyMapProps {
   liveGps?: LiveGpsPosition | null;
   panNonce?: number;
   onTileError?: () => void;
+  onVisitStamped?: () => void;
+  stampedTodayIds?: Set<string>;
+  dest?: GeoOrigin | null;
 }
 
 export function NearbyMap({
@@ -71,9 +93,13 @@ export function NearbyMap({
   liveGps = null,
   panNonce = 0,
   onTileError,
+  onVisitStamped,
+  stampedTodayIds = new Set(),
+  dest = null,
 }: NearbyMapProps) {
   const onTileErrorRef = useRef(onTileError);
   onTileErrorRef.current = onTileError;
+  const corridor = Boolean(dest);
 
   return (
     <div className="nearby-map" aria-label="Mapa okolí">
@@ -91,16 +117,32 @@ export function NearbyMap({
             tileerror: () => onTileErrorRef.current?.(),
           }}
         />
-        <FitView origin={origin} radiusKm={radiusKm} />
+        {dest ? <FitCorridor origin={origin} dest={dest} /> : <FitView origin={origin} radiusKm={radiusKm} />}
         <PanTo position={liveGps} nonce={panNonce} />
-        <Circle
-          center={[origin.latitude, origin.longitude]}
-          radius={radiusKm * 1000}
-          pathOptions={{ color: "#3d5a40", fillOpacity: 0.08 }}
-        />
+        {corridor ? null : (
+          <Circle
+            center={[origin.latitude, origin.longitude]}
+            radius={radiusKm * 1000}
+            pathOptions={{ color: "#3d5a40", fillOpacity: 0.08 }}
+          />
+        )}
+        {dest ? (
+          <Polyline
+            positions={[
+              [origin.latitude, origin.longitude],
+              [dest.latitude, dest.longitude],
+            ]}
+            pathOptions={{ color: "#3d5a40", weight: 3, dashArray: "8 8" }}
+          />
+        ) : null}
         <Marker position={[origin.latitude, origin.longitude]}>
           <Popup>Tady · {origin.label}</Popup>
         </Marker>
+        {dest ? (
+          <Marker position={[dest.latitude, dest.longitude]}>
+            <Popup>Cíl · {dest.label}</Popup>
+          </Marker>
+        ) : null}
         {liveGps ? (
           <>
             {liveGps.accuracy != null && liveGps.accuracy > 0 ? (
@@ -132,11 +174,18 @@ export function NearbyMap({
               }}
             >
               <Popup>
-                <Link to={`/place/${hit.place.id}?from=map`} state={{ from: "map" }}>
-                  {hit.place.name}
-                </Link>
-                <br />
-                {hit.km.toFixed(1)} km
+                <div className="map-popup">
+                  <Link to={`/place/${hit.place.id}?from=map`} state={{ from: "map" }}>
+                    {hit.place.name}
+                  </Link>
+                  <p className="muted small">{hit.km.toFixed(1)} km</p>
+                  <StampButton
+                    placeId={hit.place.id}
+                    alreadyToday={stampedTodayIds.has(hit.place.id)}
+                    size="compact"
+                    onStamped={() => onVisitStamped?.()}
+                  />
+                </div>
               </Popup>
             </CircleMarker>
           ) : null,

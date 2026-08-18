@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -12,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import get_default_catalog_path
-from app.db.models import AppMeta, Place, PlacePhoto, now_iso
+from app.db.models import AppMeta, Place, now_iso
 from app.logging_setup import get_logger
 from app.services.catalog_schema import SCHEMA_VERSION, validate_catalog
 from app.services.source_urls import is_http_url, source_page_url
@@ -29,6 +30,17 @@ CATALOG_ATTRIBUTION = {
     "osm": "© OpenStreetMap contributors, ODbL",
     "commons": "Licence u jednotlivých fotografií",
 }
+
+_REVIEW_NOTE_RE = re.compile(r"pro review|nejasn[ýy] z[áa]znam", re.IGNORECASE)
+
+
+def public_short_description(text: str | None) -> str | None:
+    raw = (text or "").strip()
+    if not raw:
+        return None
+    if _REVIEW_NOTE_RE.search(raw):
+        return None
+    return raw
 
 
 @dataclass(frozen=True)
@@ -92,16 +104,8 @@ def _catalog_links(place: Place) -> dict[str, str | None]:
     }
 
 
-def _pick_photo(place: Place) -> PlacePhoto | None:
-    photos = list(place.photos)
-    if not photos:
-        return None
-    photos.sort(key=lambda item: (0 if item.is_primary else 1, item.id))
-    return photos[0]
-
-
 def _catalog_image(place: Place) -> dict[str, str | None] | None:
-    photo = _pick_photo(place)
+    photo = place.primary_photo
     if photo is None:
         return None
     image = {
@@ -126,7 +130,7 @@ def place_to_catalog_item(place: Place) -> dict[str, Any]:
         "types": list(dict.fromkeys(item.code for item in place.types)),
         "condition": place.condition,
         "visitability": place.visitability,
-        "short_description": place.short_description or None,
+        "short_description": public_short_description(place.short_description),
         "heritage_status": place.heritage_status or None,
         "unesco": bool(place.unesco),
         "location": {
@@ -140,6 +144,18 @@ def place_to_catalog_item(place: Place) -> dict[str, Any]:
         },
         "links": _catalog_links(place),
         "image": _catalog_image(place),
+        "osm_opening_hours": (place.osm_opening_hours or "").strip() or None,
+        "phone": (place.phone or "").strip() or None,
+        "fee": (place.fee or "").strip() or None,
+        "wheelchair": (place.wheelchair or "").strip() or None,
+        "parking": (place.parking or "").strip() or None,
+        "visit_duration_minutes": place.visit_duration_minutes,
+        "last_entry": (place.last_entry or "").strip() or None,
+        "dogs": (place.dogs or "").strip() or None,
+        "payment": (place.payment or "").strip() or None,
+        "amenities": place.amenity_codes,
+        "inception_year": place.inception_year,
+        "architectural_style": (place.architectural_style or "").strip() or None,
     }
 
 

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sloučení deníku — Památky</title>
+  <link rel="stylesheet" href="/static/vendor/pico/pico.min.css">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <main class="container lan-phone">
+    {% block content %}{% endblock %}
+  </main>
+  <script>
+    (function () {
+      document.body.addEventListener("submit", function (event) {
+        if (event.defaultPrevented) {
+          return;
+        }
+        var form = event.target;
+        if (!(form instanceof HTMLFormElement)) {
+          return;
+        }
+        if (form.method.toLowerCase() !== "post") {
+          return;
+        }
+        if (form.dataset.submitting === "1") {
+          event.preventDefault();
+          return;
+        }
+        form.dataset.submitting = "1";
+        form.querySelectorAll("button[type=submit], input[type=submit]").forEach(function (btn) {
+          btn.disabled = true;
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

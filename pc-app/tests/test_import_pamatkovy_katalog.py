@@ -30,6 +30,29 @@ def test_castle_like_filter_and_parser() -> None:
     assert "Gotický hrad" in (bouzov.short_description or "")
 
 
+def test_glued_obec_okres_takes_first_part() -> None:
+    tables = {
+        "KP": [
+            {
+                "katalogové_číslo": "1000158360",
+                "název": "zámek Uherčice",
+                "obec": "Brno; Milotice; Uherčice",
+                "okres": "Brno-město; Hodonín; Znojmo",
+                "kraj": "Jihomoravský kraj",
+                "typ_památkové_ochrany": "kulturní památka",
+                "rejstříkové_číslo_ÚSKP": "283",
+                "anotace": "x",
+            }
+        ]
+    }
+    records = records_from_tables(tables, "t")
+    assert len(records) == 1
+    assert records[0].municipality == "Brno"
+    assert records[0].district == "Brno-město"
+    assert ";" not in (records[0].municipality or "")
+    assert records[0].raw.get("glued_location") is True
+
+
 def test_known_uskp_keeps_non_castle_row() -> None:
     tables = {
         "KP": [

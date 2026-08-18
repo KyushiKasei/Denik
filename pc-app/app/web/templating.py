@@ -4,7 +4,10 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 
 from app.db.enums import label
-from app.services.source_urls import is_http_url, source_page_url
+from app.services.display import display_place_name
+from app.services.diary_present import format_visit_date
+from app.services.source_urls import is_http_url, photo_display_url, source_page_url
+from app.services.stamp_art import place_stamp_svg, stamp_svg, visit_stamp_svg
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 
@@ -96,6 +99,13 @@ class NavAwareTemplates(Jinja2Templates):
 templates = NavAwareTemplates(directory=str(TEMPLATES_DIR))
 templates.env.globals["enum_label"] = label
 templates.env.globals["is_http_url"] = is_http_url
+templates.env.globals["photo_display_url"] = photo_display_url
 templates.env.globals["source_page_url"] = source_page_url
 templates.env.globals["import_code_label"] = import_code_label
 templates.env.globals["with_count"] = with_count
+templates.env.globals["stamp_svg"] = stamp_svg
+templates.env.globals["visit_stamp_svg"] = visit_stamp_svg
+templates.env.globals["place_stamp_svg"] = place_stamp_svg
+templates.env.globals["format_visit_date"] = format_visit_date
+templates.env.globals["display_place_name"] = display_place_name
+templates.env.filters["display_place_name"] = display_place_name

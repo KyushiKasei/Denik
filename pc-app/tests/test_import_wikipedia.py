@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Place, PlaceSource
 from app.importers.wikidata.importer import SAMPLE_SPARQL_FIXTURE, records_from_file as wikidata_records
+from app.importers.wikipedia.client import MAX_CATEGORY_CONTINUES, WikipediaClient
 from app.importers.wikipedia.importer import SAMPLE_JSON, records_from_file
 from app.importers.wikipedia.parser import CATEGORIES, type_from_category
 from app.services.apply_import import apply_import
@@ -20,6 +22,28 @@ def test_wikipedia_categories_include_lookout_and_zoo() -> None:
     assert type_from_category("Kategorie:Jeskyně_v_Česku") == ["CAVE"]
     assert type_from_category("Kategorie:Hrady_v_Česku") == ["CASTLE"]
     assert type_from_category("Kategorie:Hrady v Česku") == ["CASTLE"]
+
+
+def test_wikipedia_client_stops_after_continue_cap() -> None:
+    calls = {"members": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "list=categorymembers" in str(request.url):
+            calls["members"] += 1
+            n = calls["members"]
+            return httpx.Response(
+                200,
+                json={
+                    "query": {"categorymembers": [{"title": f"Hrad {n}"}]},
+                    "continue": {"cmcontinue": f"page|{n}"},
+                },
+            )
+        return httpx.Response(200, json={"query": {"pages": {}}})
+
+    client = WikipediaClient(transport=httpx.MockTransport(handler), sleep=lambda _s: None)
+    payload = client.fetch_category("Kategorie:Hrady_v_Česku")
+    assert calls["members"] == MAX_CATEGORY_CONTINUES
+    assert len(payload["query"]["categorymembers"]) == MAX_CATEGORY_CONTINUES
 
 
 def test_wikipedia_url_only_joins_qid_and_flags_missing(session: Session) -> None:

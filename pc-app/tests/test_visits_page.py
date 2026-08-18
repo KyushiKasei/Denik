@@ -53,7 +53,8 @@ def test_dashboard_visit_count_links_to_visits(client) -> None:
     home = client.get("/")
     assert home.status_code == 200
     assert 'href="/visits"' in home.text
-    assert ">Návštěvy</a>" in home.text
+    assert ">Deník</a>" in home.text
+    assert 'href="/diary"' in home.text
     assert 'href="/places?journal=visited"' in home.text
 
 

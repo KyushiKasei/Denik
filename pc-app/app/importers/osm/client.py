@@ -14,13 +14,20 @@ ENDPOINT = "https://overpass-api.de/api/interpreter"
 _log = get_logger()
 
 QUERY = """
-[out:json][timeout:90];
+[out:json][timeout:120];
 area["ISO3166-1"="CZ"][admin_level=2];
 (
   nwr["historic"="castle"](area);
   nwr["man_made"="tower"]["tower:type"="observation"](area);
   nwr["tourism"="zoo"](area);
   nwr["natural"="cave_entrance"](area);
+)->.heritage;
+.heritage out center tags;
+(
+  nwr["amenity"="toilets"](around.heritage:350);
+  nwr["amenity"="cafe"](around.heritage:350);
+  nwr["amenity"="restaurant"](around.heritage:350);
+  nwr["leisure"="playground"](around.heritage:350);
 );
 out center tags;
 """.strip()
@@ -30,7 +37,7 @@ class OsmClient:
     def __init__(
         self,
         *,
-        timeout: float = 100.0,
+        timeout: float = 130.0,
         transport: httpx.BaseTransport | None = None,
         sleep: Any = None,
     ) -> None:
@@ -46,7 +53,7 @@ class OsmClient:
         }
         if self._sleep is not None:
             kwargs["sleep"] = self._sleep
-        _log.info("osm Overpass castle/lookout/zoo/cave CZ")
+        _log.info("osm Overpass castle/lookout/zoo/cave + amenities CZ")
         raw = fetch_bytes(
             ENDPOINT,
             data={"data": QUERY},

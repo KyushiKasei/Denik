@@ -17,6 +17,7 @@ from app.services.backup import (
     restore_from_path,
     save_uploaded_backup,
 )
+from app.services.diary_bundle import MAX_UPLOAD_BYTES
 from app.web.templating import templates
 
 router = APIRouter()
@@ -85,7 +86,9 @@ def backup_restore(request: Request, filename: str = Form(...)):
 @router.post("/backup/restore-upload", response_model=None)
 async def backup_restore_upload(request: Request, file: UploadFile = File(...)):
     db_path = get_database_path()
-    raw = await file.read()
+    raw = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(raw) > MAX_UPLOAD_BYTES:
+        return _page(request, error="Soubor je větší než 80 MB.", status_code=400)
     try:
         saved = save_uploaded_backup(raw, db_path)
         restore_from_path(saved, db_path)

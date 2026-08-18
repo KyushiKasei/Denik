@@ -1,0 +1,75 @@
+{% extends "lan/base.html" %}
+{% block content %}
+<h1>Sloučení deníku</h1>
+<p><strong>Toto není deník z telefonu.</strong> Ikona na ploše je jiná aplikace. Tahle stránka v Safari je jen pošťák k PC.</p>
+
+{% if error %}
+<p class="error" role="alert">{{ error }}</p>
+{% endif %}
+
+{% if not active %}
+<p>Na počítači na přehledu zapněte <strong>Domácí síť</strong> a tuto stránku znovu načtěte.</p>
+{% elif not unlocked %}
+<p class="muted">Zadejte PIN z obrazovky PC. QR vás nespároval s PWA — jen otevřel tuto stránku.</p>
+<form method="post" action="/lan/unlock">
+  <label>PIN z obrazovky PC
+    <input type="text" name="pin" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" required>
+  </label>
+  <button type="submit">Odemknout</button>
+</form>
+{% else %}
+<ol class="lan-steps">
+  <li>V <strong>PWA na ploše</strong> exportujte deník a uložte ho do Souborů.</li>
+  <li>Tady nahrajte ten soubor.</li>
+  <li>Stáhněte sloučený <code>diary.zip</code>.</li>
+  <li>V PWA na Nastavení ten zip importujte.</li>
+</ol>
+
+<form method="post" action="/lan/import" enctype="multipart/form-data">
+  <label>2. Nahrát diary.json nebo diary.zip ze Souborů
+    <input type="file" name="file" accept="application/json,.json,application/zip,.zip" required>
+  </label>
+  <button type="submit">Sloučit na PC</button>
+</form>
+
+{% if result %}
+<p class="notice" role="status">Deník je sloučený. Místa se z deníku nezakládala.</p>
+<ul>
+  <li>návštěvy nové: {{ result.visits_inserted }}</li>
+  <li>návštěvy aktualizované: {{ result.visits_updated }}</li>
+  <li>návštěvy beze změny: {{ result.visits_unchanged }}</li>
+  <li>stavy nové: {{ result.states_inserted }}</li>
+  <li>stavy aktualizované: {{ result.states_updated }}</li>
+  <li>stavy beze změny: {{ result.states_unchanged }}</li>
+  <li>výlety nové: {{ result.trips_inserted }}</li>
+  <li>výlety aktualizované: {{ result.trips_updated }}</li>
+  <li>výlety beze změny: {{ result.trips_unchanged }}</li>
+</ul>
+{% if result.unknown_place_ids %}
+<p>Neznámá místa (návštěva uložena, místo v katalogu se nezakládá):</p>
+<ul>
+  {% for pid in result.unknown_place_ids %}
+  <li><code>{{ pid }}</code></li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% if photo_count %}
+<p class="muted">Uloženo osobních fotek: {{ photo_count }}.</p>
+{% endif %}
+{% if filename %}<p class="muted">Soubor: {{ filename }}</p>{% endif %}
+<p>Teď stáhněte zip do Souborů a v PWA ho importujte.</p>
+<p>
+  <a href="/lan/diary.zip" role="button">3. Stáhnout sloučený diary.zip</a>
+</p>
+<p>
+  <a href="/lan/catalog.json" role="button" class="secondary">Stáhnout catalog.json</a>
+</p>
+{% else %}
+<div class="actions-row">
+  <a href="/lan/diary.zip" role="button" class="secondary">Stáhnout sloučený diary.zip</a>
+  <a href="/lan/catalog.json" role="button" class="secondary">Stáhnout catalog.json</a>
+</div>
+<p class="muted">Sloučený zip nahrajte v PWA na záložce Nastavení. Katalog jen nahrazuje seznam míst, deník nesmaže.</p>
+{% endif %}
+{% endif %}
+{% endblock %}

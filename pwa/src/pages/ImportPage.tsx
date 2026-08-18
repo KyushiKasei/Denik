@@ -1,17 +1,28 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { CatalogImportError } from "../catalog/errors";
-import { loadCatalogMeta, previewCatalogImport, replacePlacesStore, catalogVersionAlreadyLoaded } from "../catalog/importCatalog";
-import type { Catalog, CatalogDiff } from "../catalog/types";
+import { loadCatalogMeta, loadPlaces, previewCatalogImport, replacePlacesStore, catalogVersionAlreadyLoaded, type CatalogMeta } from "../catalog/importCatalog";
+import type { Catalog, CatalogDiff, CatalogPlace } from "../catalog/types";
 import { FirstRunCoach } from "../components/FirstRunCoach";
+import { PhotoIntake } from "../components/PhotoIntake";
+import { SyncStatus } from "../components/SyncStatus";
+import { ThemeSwitch } from "../components/ThemeSwitch";
 import { DiaryImportError } from "../diary/errors";
 import { countVisitsForRemovedPlaces, listOrphanedDiary } from "../diary/orphans";
-import { downloadDiaryFile, exportDiary, importDiary, loadDiaryMeta, loadVisits } from "../diary/store";
+import { downloadDiaryBundle, importDiary, importDiaryPhotos, loadDiaryMeta, loadVisits } from "../diary/store";
+import { inspectIncomingFile } from "../diary/fileIntake";
 import type { Diary, DiaryMergeCounts, DiaryMeta } from "../diary/types";
+import { consumeSharedCache, parseSharedGeo, shareQueryFromLocation } from "../geo/shareTarget";
+import { formatDateTime } from "../diary/timeline";
 
 export function ImportPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const [familyMerge, setFamilyMerge] = useState(false);
+  const [sharedFiles, setSharedFiles] = useState<File[] | undefined>(undefined);
+  const [shareHint, setShareHint] = useState<string | null>(null);
   const [currentVersion, setCurrentVersion] = useState<number | null>(null);
+  const [catalogMeta, setCatalogMeta] = useState<CatalogMeta | null>(null);
   const [diaryMeta, setDiaryMeta] = useState<DiaryMeta | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [catalog, setCatalog] = useState<Catalog | null>(null);
@@ -24,19 +35,160 @@ export function ImportPage() {
   const [diary, setDiary] = useState<Diary | null>(null);
   const [diaryError, setDiaryError] = useState<string | null>(null);
   const [diaryBusy, setDiaryBusy] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
   const [diaryResult, setDiaryResult] = useState<DiaryMergeCounts | null>(null);
   const [orphanVisitCount, setOrphanVisitCount] = useState(0);
   const [existingOrphans, setExistingOrphans] = useState(0);
+  const [diaryPhotoCount, setDiaryPhotoCount] = useState(0);
+  const [dropHint, setDropHint] = useState(false);
   const [metaReady, setMetaReady] = useState(false);
+  const [zipEntries, setZipEntries] = useState<Array<{ name: string; data: Uint8Array }> | null>(null);
+  const [places, setPlaces] = useState<CatalogPlace[]>([]);
+  const redirectTimer = useRef(0);
+  const alive = useRef(true);
 
   useEffect(() => {
-    void loadCatalogMeta().then((meta) => {
-      setCurrentVersion(meta.catalog_version);
-      setMetaReady(true);
-    });
-    void loadDiaryMeta().then(setDiaryMeta);
-    void listOrphanedDiary().then((groups) => setExistingOrphans(groups.length));
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadCatalogMeta()
+      .then((meta) => {
+        if (cancelled) {
+          return;
+        }
+        setCatalogMeta(meta);
+        setCurrentVersion(meta.catalog_version);
+        setMetaReady(true);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setError("Stav katalogu se nepodařilo načíst.");
+        }
+      });
+    void loadDiaryMeta()
+      .then((meta) => {
+        if (!cancelled) {
+          setDiaryMeta(meta);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDiaryError("Stav deníku se nepodařilo načíst.");
+        }
+      });
+    void listOrphanedDiary()
+      .then((groups) => {
+        if (!cancelled) {
+          setExistingOrphans(groups.length);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDiaryError("Seznam osiřelých záznamů se nepodařilo načíst.");
+        }
+      });
+    void loadPlaces()
+      .then((rows) => {
+        if (!cancelled) {
+          setPlaces(rows);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDiaryError("Katalog se nepodařilo načíst pro přiřazení fotek.");
+        }
+      });
+    return () => {
+      cancelled = true;
+      window.clearTimeout(redirectTimer.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    const query = shareQueryFromLocation(searchParams.toString());
+    const geo = parseSharedGeo(query.url || query.text);
+    if (geo) {
+      navigate(`/map?lat=${geo.latitude}&lon=${geo.longitude}&origin_label=${encodeURIComponent(geo.label)}`, { replace: true });
+      return;
+    }
+    const fromShareTarget = searchParams.get("shared") === "1";
+    if (query.title.trim() && !query.url && !query.text && !fromShareTarget) {
+      navigate(`/catalog?q=${encodeURIComponent(query.title.trim())}`, { replace: true });
+      return;
+    }
+    if (!fromShareTarget) {
+      return;
+    }
+    let cancelled = false;
+    void consumeSharedCache()
+      .then((shared) => {
+        if (cancelled || !shared) {
+          return;
+        }
+        const fromShare = parseSharedGeo(shared.url || shared.text);
+        if (fromShare) {
+          navigate(`/map?lat=${fromShare.latitude}&lon=${fromShare.longitude}&origin_label=${encodeURIComponent(fromShare.label)}`, {
+            replace: true,
+          });
+          return;
+        }
+        if (shared.files.length) {
+          setSharedFiles(shared.files);
+          setShareHint(`${shared.files.length} sdílených fotek. Přiřaďte je k návštěvám.`);
+        } else if (shared.title.trim()) {
+          navigate(`/catalog?q=${encodeURIComponent(shared.title.trim())}`, { replace: true });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setError("Sdílený soubor se nepodařilo načíst.");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate, searchParams]);
+
+  const onIncoming = async (file: File | undefined) => {
+    if (!file) {
+      return;
+    }
+    const inspected = await inspectIncomingFile(file);
+    if (inspected.kind === "catalog" && inspected.catalogText) {
+      const { loadCatalogFromText } = await import("../catalog/validate");
+      const parsed = loadCatalogFromText(inspected.catalogText);
+      await onCatalogParsed(file.name, parsed);
+      return;
+    }
+    if ((inspected.kind === "diary" || inspected.kind === "diary-zip") && inspected.diary) {
+      setDiaryError(null);
+      setDiaryResult(null);
+      setDiary(inspected.diary);
+      setDiaryFileName(file.name);
+      setZipEntries(inspected.zipEntries ?? null);
+      return;
+    }
+    throw new Error("Soubor není catalog.json, diary.json ani diary.zip.");
+  };
+
+  const onCatalogParsed = async (name: string, parsed: Catalog) => {
+    setError(null);
+    setDone(false);
+    setCatalog(null);
+    setDiff(null);
+    setOrphanVisitCount(0);
+    setFileName(name);
+    const preview = await previewCatalogImport(parsed);
+    const visits = await loadVisits();
+    setCatalog(parsed);
+    setDiff(preview);
+    setOrphanVisitCount(countVisitsForRemovedPlaces(visits, preview.removedIds));
+  };
 
   const onFile = async (file: File | undefined) => {
     setError(null);
@@ -49,36 +201,44 @@ export function ImportPage() {
       return;
     }
     try {
-      const text = await file.text();
-      const { loadCatalogFromText } = await import("../catalog/validate");
-      const parsed = loadCatalogFromText(text);
-      const preview = await previewCatalogImport(parsed);
-      const visits = await loadVisits();
-      setCatalog(parsed);
-      setDiff(preview);
-      setOrphanVisitCount(countVisitsForRemovedPlaces(visits, preview.removedIds));
+      await onIncoming(file);
     } catch (err) {
-      const message = err instanceof CatalogImportError ? err.message : "Soubor se nepodařilo načíst.";
+      if (!alive.current) {
+        return;
+      }
+      const message = err instanceof CatalogImportError ? err.message : err instanceof Error ? err.message : "Soubor se nepodařilo načíst.";
       setError(message);
     }
   };
 
   const apply = async () => {
-    if (!catalog) {
+    if (!catalog || busy) {
       return;
     }
     setBusy(true);
     setError(null);
     try {
       await replacePlacesStore(catalog);
+      if (!alive.current) {
+        return;
+      }
       setDone(true);
       setCurrentVersion(catalog.catalog_version);
       setExistingOrphans((await listOrphanedDiary()).length);
-      window.setTimeout(() => navigate("/"), 800);
+      window.clearTimeout(redirectTimer.current);
+      redirectTimer.current = window.setTimeout(() => {
+        if (alive.current) {
+          navigate("/");
+        }
+      }, 800);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Import selhal.");
+      if (alive.current) {
+        setError(err instanceof Error ? err.message : "Import selhal.");
+      }
     } finally {
-      setBusy(false);
+      if (alive.current) {
+        setBusy(false);
+      }
     }
   };
 
@@ -86,51 +246,105 @@ export function ImportPage() {
     setDiaryError(null);
     setDiaryResult(null);
     setDiary(null);
+    setZipEntries(null);
     setDiaryFileName(file?.name ?? null);
     if (!file) {
       return;
     }
     try {
-      const text = await file.text();
-      const { loadDiaryFromText } = await import("../diary/validate");
-      setDiary(loadDiaryFromText(text));
+      await onIncoming(file);
     } catch (err) {
-      const message = err instanceof DiaryImportError ? err.message : "Soubor se nepodařilo načíst.";
+      if (!alive.current) {
+        return;
+      }
+      const message = err instanceof DiaryImportError ? err.message : err instanceof Error ? err.message : "Soubor se nepodařilo načíst.";
       setDiaryError(message);
     }
   };
 
   const applyDiary = async () => {
-    if (!diary) {
+    if (!diary || diaryBusy) {
       return;
     }
     setDiaryBusy(true);
     setDiaryError(null);
     try {
-      const counts = await importDiary(diary);
+      const counts = await importDiary(diary, { family: familyMerge });
+      const photos = zipEntries ? await importDiaryPhotos(zipEntries) : 0;
+      if (!alive.current) {
+        return;
+      }
+      setDiaryPhotoCount(photos);
       setDiaryResult(counts);
       setDiaryMeta(await loadDiaryMeta());
     } catch (err) {
-      setDiaryError(err instanceof Error ? err.message : "Import deníku selhal.");
+      if (alive.current) {
+        setDiaryError(err instanceof Error ? err.message : "Import deníku selhal.");
+      }
     } finally {
-      setDiaryBusy(false);
+      if (alive.current) {
+        setDiaryBusy(false);
+      }
     }
   };
 
   const exportNow = async () => {
-    const file = await exportDiary();
-    await downloadDiaryFile(file);
-    setDiaryMeta(await loadDiaryMeta());
+    if (exportBusy) {
+      return;
+    }
+    setExportBusy(true);
+    setDiaryError(null);
+    try {
+      await downloadDiaryBundle();
+      if (alive.current) {
+        setDiaryMeta(await loadDiaryMeta());
+      }
+    } catch (err) {
+      if (alive.current) {
+        setDiaryError(err instanceof Error ? err.message : "Export deníku selhal.");
+      }
+    } finally {
+      if (alive.current) {
+        setExportBusy(false);
+      }
+    }
   };
 
   const sameVersion = catalog != null && catalogVersionAlreadyLoaded(currentVersion, catalog.catalog_version);
 
   return (
-    <section>
+    <section
+      className={dropHint ? "file-drop is-active" : "file-drop"}
+      onDragOver={(event) => {
+        event.preventDefault();
+        setDropHint(true);
+      }}
+      onDragLeave={() => setDropHint(false)}
+      onDrop={(event) => {
+        event.preventDefault();
+        setDropHint(false);
+        const file = event.dataTransfer.files?.[0];
+        void onIncoming(file).catch((err: unknown) => {
+          if (!alive.current) {
+            return;
+          }
+          const message = err instanceof Error ? err.message : "Soubor se nepodařilo načíst.";
+          setError(message);
+        });
+      }}
+    >
       <header className="page-header">
-        <h1>Soubory</h1>
-        <p className="muted">Katalog a deník se přenášejí soubory. Mezi PC a telefonem není server.</p>
+        <h1>Nastavení</h1>
+        <p className="muted">
+          Vzhled, katalog a deník. Soubory jdou Dropboxem nebo Soubory, doma na Wi-Fi přes Safari (ne z PWA).
+        </p>
       </header>
+
+      <h2>Vzhled</h2>
+      <p className="muted">Světlý, tmavý, nebo podle nastavení systému.</p>
+      <ThemeSwitch />
+
+      <SyncStatus catalog={catalogMeta} diary={diaryMeta} />
 
       {metaReady && currentVersion == null ? <FirstRunCoach /> : null}
 
@@ -204,22 +418,61 @@ export function ImportPage() {
         </p>
       ) : null}
 
+      <PhotoIntake places={places} initialFiles={sharedFiles} />
+      {shareHint ? (
+        <p className="notice" role="status">
+          {shareHint}
+        </p>
+      ) : null}
+
       <h2>Deník</h2>
       <p className="muted">
-        {diaryMeta?.last_export_at ? `Poslední export: ${diaryMeta.last_export_at}. ` : "Deník ještě nebyl exportován. "}
-        {diaryMeta?.last_import_at ? `Poslední import: ${diaryMeta.last_import_at}.` : ""}
-      </p>
-      <p>
-        <button type="button" className="ghost" onClick={() => void exportNow()}>
-          Exportovat diary.json
-        </button>
+        {diaryMeta?.last_export_at ? `Poslední export: ${formatDateTime(diaryMeta.last_export_at)}. ` : "Deník ještě nebyl exportován. "}
+        {diaryMeta?.last_import_at ? `Poslední import: ${formatDateTime(diaryMeta.last_import_at)}.` : ""}
       </p>
 
+      <div className="diff-card">
+        <h2>Přes Dropbox / Soubory</h2>
+        <p className="muted small">
+          Stejná složka, kterou na PC nastavíte na přehledu. V iOS sdílecím listu zvolte Uložit do Dropboxu nebo Soubory.
+        </p>
+        <ol className="lan-steps">
+          <li>Tady exportujte deník a uložte <code>diary.zip</code> do Dropboxu.</li>
+          <li>Na PC stiskněte Sloučit deník ze složky.</li>
+          <li>Tady vyberte <code>diary-z-pc.zip</code> z Dropboxu a importujte ho.</li>
+        </ol>
+        <p className="muted small">Katalog: na PC dejte catalog.json do složky, tady nahradit katalog.</p>
+        <p>
+          <button type="button" onClick={() => void exportNow()} disabled={exportBusy}>
+            {exportBusy ? "Exportuji…" : "Exportovat deník do Dropboxu"}
+          </button>
+        </p>
+      </div>
+
+      <div className="diff-card">
+        <h2>Doma na Wi-Fi</h2>
+        <p className="muted small">
+          Safari z QR na PC je jen pošťák. Poznámky žijí v ikoně na ploše, ne v té Safari stránce. Stejná privátní síť, ne
+          guest Wi-Fi.
+        </p>
+        <ol className="lan-steps">
+          <li>Na PC na přehledu zapněte domácí síť a naskenujte QR do Safari.</li>
+          <li>Tady exportujte deník a soubor uložte do Souborů.</li>
+          <li>V Safari zadejte PIN, nahrajte export, stáhněte sloučený diary.zip.</li>
+          <li>Vraťte se sem a importujte stažený zip. Volitelně stáhněte i catalog.json.</li>
+        </ol>
+        <p>
+          <button type="button" className="ghost" onClick={() => void exportNow()} disabled={exportBusy}>
+            {exportBusy ? "Exportuji…" : "1. Exportovat deník pro Safari"}
+          </button>
+        </p>
+      </div>
+
       <label className="file-picker">
-        Vybrat diary.json
+        Vybrat diary.json, diary.zip nebo diary-z-pc.zip
         <input
           type="file"
-          accept=".json,application/json,text/plain"
+          accept=".json,.zip,application/json,application/zip,text/plain"
           onChange={(event) => void onDiaryFile(event.target.files?.[0])}
         />
       </label>
@@ -237,9 +490,14 @@ export function ImportPage() {
             <li>návštěv v souboru: {diary.visits.length}</li>
             <li>stavů míst: {diary.place_states.length}</li>
             <li>výletů: {diary.trips?.length ?? 0}</li>
+            {zipEntries ? <li>fotky v ZIP: {zipEntries.filter((entry) => entry.name.startsWith("photos/")).length}</li> : null}
             <li>exportováno z: {diary.exported_from}</li>
           </ul>
           <p className="muted small">Sloučení podle ID. Stejný soubor dvakrát nevytvoří duplicity. Místo se z deníku nezakládá.</p>
+          <label>
+            <input type="checkbox" checked={familyMerge} onChange={(event) => setFamilyMerge(event.target.checked)} />
+            Rodinné sloučení (stejné místo a den = jedno razítko)
+          </label>
           <button type="button" onClick={() => void applyDiary()} disabled={diaryBusy}>
             {diaryBusy ? "Slučuji…" : "Importovat deník"}
           </button>
@@ -260,8 +518,16 @@ export function ImportPage() {
             Výlety: +{diaryResult.tripsInserted} nové, {diaryResult.tripsUpdated} aktualizované,{" "}
             {diaryResult.tripsUnchanged} beze změny.
           </p>
+          {diaryPhotoCount > 0 ? <p>Fotky: {diaryPhotoCount} uložených k návštěvám.</p> : null}
+          {diaryResult.familyCollapsed ? (
+            <p>Rodinná razítka sloučená: {diaryResult.familyCollapsed}.</p>
+          ) : null}
         </div>
       ) : null}
+
+      <p className="muted small">
+        <Link to="/info">Info</Link>
+      </p>
     </section>
   );
 }

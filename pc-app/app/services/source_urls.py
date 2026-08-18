@@ -10,6 +10,17 @@ def is_http_url(value: Any) -> bool:
     return isinstance(value, str) and value.startswith(("http://", "https://"))
 
 
+def photo_display_url(photo: Any) -> str | None:
+    """Veřejné URL náhledu: thumbnail, jinak originál / source."""
+    if photo is None:
+        return None
+    for attr in ("thumbnail_url", "original_url", "source_url"):
+        value = getattr(photo, attr, None)
+        if is_http_url(value):
+            return str(value).strip()
+    return None
+
+
 def identity_source_url(source_type: str | None, external_id: str | None) -> str | None:
     """Sestaví stránku zdroje z typu a externího ID. None, když nevíme."""
     if not source_type or not external_id:

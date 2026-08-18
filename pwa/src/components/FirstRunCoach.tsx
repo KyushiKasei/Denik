@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { downloadDiaryFile, exportDiary } from "../diary/store";
 import { isStoragePersisted, persistStorage } from "../storage/persist";
@@ -9,18 +9,41 @@ interface FirstRunCoachProps {
 
 export function FirstRunCoach({ catalogLink = false }: FirstRunCoachProps) {
   const [persisted, setPersisted] = useState<boolean | null>(null);
+  const [exportBusy, setExportBusy] = useState(false);
+  const alive = useRef(true);
 
   useEffect(() => {
-    void isStoragePersisted().then(setPersisted);
+    alive.current = true;
+    void isStoragePersisted().then((value) => {
+      if (alive.current) {
+        setPersisted(value);
+      }
+    });
+    return () => {
+      alive.current = false;
+    };
   }, []);
 
   const requestPersist = async () => {
-    setPersisted(await persistStorage());
+    const value = await persistStorage();
+    if (alive.current) {
+      setPersisted(value);
+    }
   };
 
   const exportNow = async () => {
-    const file = await exportDiary();
-    await downloadDiaryFile(file);
+    if (exportBusy) {
+      return;
+    }
+    setExportBusy(true);
+    try {
+      const file = await exportDiary();
+      await downloadDiaryFile(file);
+    } finally {
+      if (alive.current) {
+        setExportBusy(false);
+      }
+    }
   };
 
   return (
@@ -65,8 +88,8 @@ export function FirstRunCoach({ catalogLink = false }: FirstRunCoachProps) {
             Návštěvy žijí jen v tomto telefonu, dokud nevyexportujete <code>diary.json</code>.
           </p>
           <p>
-            <button type="button" className="ghost" onClick={() => void exportNow()}>
-              Exportovat diary.json
+            <button type="button" className="ghost" onClick={() => void exportNow()} disabled={exportBusy}>
+              {exportBusy ? "Exportuji…" : "Exportovat diary.json"}
             </button>
           </p>
         </li>

@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.datastructures import FormData
 
-from app.db.models import Place
+from app.db.models import Place, PlacePhoto
 from app.db.session import get_session
 from app.services.overrides import upsert_override
 from app.services.places import PlaceFilters, PlaceInput, create_place, list_places, mark_ruins_free_access
@@ -58,6 +58,43 @@ def test_create_place(client) -> None:
     assert "Bouzov" in detail.text
     assert "Hrad" in detail.text
     assert public_id in detail.text
+    listing = client.get("/places")
+    assert "place-list-thumb is-empty" in listing.text
+
+
+def test_place_pages_show_catalog_photo(client) -> None:
+    client.post("/places", data=_payload())
+    public_id = _public_id_from_db()
+    thumb = "https://commons.wikimedia.org/wiki/Special:FilePath/Hrad_Bouzov.jpg?width=640"
+    session = get_session()
+    try:
+        place = session.scalar(select(Place).where(Place.public_id == public_id))
+        assert place is not None
+        session.add(
+            PlacePhoto(
+                place_id=place.id,
+                source="wikimedia_commons",
+                thumbnail_url=thumb,
+                original_url="https://commons.wikimedia.org/wiki/File:Hrad_Bouzov.jpg",
+                attribution="Jan Novák",
+                license="CC BY-SA 4.0",
+                license_url="https://creativecommons.org/licenses/by-sa/4.0/",
+                is_primary=1,
+            )
+        )
+        session.commit()
+    finally:
+        session.close()
+
+    detail = client.get(f"/places/{public_id}")
+    assert detail.status_code == 200
+    assert thumb in detail.text
+    assert "Jan Novák" in detail.text
+    assert "CC BY-SA 4.0" in detail.text
+    listing = client.get("/places?q=Bouzov")
+    assert listing.status_code == 200
+    assert thumb in listing.text
+    assert "place-list-thumb" in listing.text
 
 
 def test_archived_place_hidden_from_default_list_but_kept_in_db(client) -> None:
@@ -213,13 +250,13 @@ def test_list_filters_missing_gps_and_type(session: Session) -> None:
     create_place(session, with_gps)
     create_place(session, without)
 
-    missing_gps = list_places(session, PlaceFilters(missing_gps=True))
+    missing_gps = list_places(session, PlaceFilters(missing_gps=True, worth=False))
     assert [place.name for place in missing_gps.places] == ["Bez GPS"]
 
-    missing_type = list_places(session, PlaceFilters(missing_type=True))
+    missing_type = list_places(session, PlaceFilters(missing_type=True, worth=False))
     assert [place.name for place in missing_type.places] == ["Bez GPS"]
 
-    castles = list_places(session, PlaceFilters(type_code="CASTLE"))
+    castles = list_places(session, PlaceFilters(type_code="CASTLE", worth=False))
     assert [place.name for place in castles.places] == ["S GPS"]
 
 
@@ -263,9 +300,9 @@ def test_visitability_public_group_filter(session: Session) -> None:
             )
         ),
     )
-    public = list_places(session, PlaceFilters(visitability="PUBLIC"))
+    public = list_places(session, PlaceFilters(visitability="PUBLIC", worth=False))
     assert [place.name for place in public.places] == ["Otevřený"]
-    closed = list_places(session, PlaceFilters(visitability="NOT_PUBLIC"))
+    closed = list_places(session, PlaceFilters(visitability="NOT_PUBLIC", worth=False))
     assert [place.name for place in closed.places] == ["Soukromý"]
 
 
@@ -317,11 +354,11 @@ def test_visitability_facet_counts_respect_other_filters(session: Session) -> No
             )
         ),
     )
-    all_counts = filter_facet_counts(session, PlaceFilters())
+    all_counts = filter_facet_counts(session, PlaceFilters(worth=False))
     assert all_counts.visitability["PUBLIC"] == 2
     assert all_counts.visitability["UNKNOWN"] == 1
     assert all_counts.visitability[""] == 3
-    south = filter_facet_counts(session, PlaceFilters(region="Jihočeský kraj"))
+    south = filter_facet_counts(session, PlaceFilters(region="Jihočeský kraj", worth=False))
     assert south.visitability["PUBLIC"] == 1
     assert south.visitability["UNKNOWN"] == 1
     assert south.types["CHATEAU"] == 2
@@ -335,6 +372,7 @@ def test_dashboard_type_counts_count_mn(client) -> None:
     assert home.status_code == 200
     assert "Aktivních míst" in home.text
     assert "<strong>2</strong>" in home.text
+    assert "Zříceniny (typ nebo stav)" in home.text
 
 
 def test_search_matches_public_id_and_source_external_id(session: Session) -> None:
@@ -388,6 +426,139 @@ def test_clear_filters_link_shown_when_active(client) -> None:
     assert 'href="/places"' in filtered.text
     listing = client.get("/places")
     assert "Zrušit filtry" not in listing.text
+    all_places = client.get("/places?worth=all")
+    assert "Zrušit filtry" in all_places.text
+
+
+def test_worth_filter_hides_extinct_private_and_stubs(session: Session) -> None:
+    from app.services.places import filter_facet_counts
+
+    ruin = create_place(
+        session,
+        PlaceInput.from_form(
+            FormData(
+                [
+                    ("name", "Zřícenina"),
+                    ("condition", "RUIN"),
+                    ("visitability", "FREE_ACCESS"),
+                    ("quality_status", "VERIFIED"),
+                    ("type_codes", "RUIN"),
+                ]
+            )
+        ),
+    )
+    create_place(
+        session,
+        PlaceInput.from_form(
+            FormData(
+                [
+                    ("name", "Zaniklý"),
+                    ("condition", "EXTINCT"),
+                    ("visitability", "EXTINCT"),
+                    ("quality_status", "VERIFIED"),
+                    ("type_codes", "CASTLE"),
+                ]
+            )
+        ),
+    )
+    create_place(
+        session,
+        PlaceInput.from_form(
+            FormData(
+                [
+                    ("name", "Soukromý"),
+                    ("condition", "PRESERVED"),
+                    ("visitability", "PRIVATE"),
+                    ("quality_status", "VERIFIED"),
+                    ("type_codes", "CHATEAU"),
+                ]
+            )
+        ),
+    )
+    stub = create_place(
+        session,
+        PlaceInput.from_form(
+            FormData(
+                [
+                    ("name", "Neznámý"),
+                    ("condition", "UNKNOWN"),
+                    ("visitability", "UNKNOWN"),
+                    ("quality_status", "NEEDS_REVIEW"),
+                    ("type_codes", "CASTLE"),
+                ]
+            )
+        ),
+    )
+    nkp = create_place(
+        session,
+        PlaceInput.from_form(
+            FormData(
+                [
+                    ("name", "NKP bez fotky"),
+                    ("condition", "UNKNOWN"),
+                    ("visitability", "UNKNOWN"),
+                    ("heritage_status", "NKP"),
+                    ("quality_status", "VERIFIED"),
+                    ("type_codes", "CASTLE"),
+                ]
+            )
+        ),
+    )
+    with_web = create_place(
+        session,
+        PlaceInput.from_form(
+            FormData(
+                [
+                    ("name", "Se webem"),
+                    ("condition", "UNKNOWN"),
+                    ("visitability", "UNKNOWN"),
+                    ("official_website", "https://example.test"),
+                    ("quality_status", "VERIFIED"),
+                    ("type_codes", "CASTLE"),
+                ]
+            )
+        ),
+    )
+
+    worth = list_places(session, PlaceFilters(worth=True))
+    assert {place.name for place in worth.places} == {"Zřícenina", "NKP bez fotky", "Se webem"}
+    everything = list_places(session, PlaceFilters(worth=False))
+    assert {place.name for place in everything.places} == {
+        "Zřícenina",
+        "Zaniklý",
+        "Soukromý",
+        "Neznámý",
+        "NKP bez fotky",
+        "Se webem",
+    }
+    counts = filter_facet_counts(session, PlaceFilters(worth=True))
+    assert counts.worth == {"all": 6, "visit": 3}
+    assert ruin.name == "Zřícenina"
+    assert stub.name == "Neznámý"
+    assert nkp.name == "NKP bez fotky"
+    assert with_web.name == "Se webem"
+
+
+def test_catalog_page_worth_toggle_defaults_to_visit(client) -> None:
+    client.post("/places", data=_payload())
+    client.post(
+        "/places",
+        data=_payload(
+            name="Pustý zámek",
+            condition="EXTINCT",
+            visitability="EXTINCT",
+            type_codes=["CASTLE"],
+        ),
+    )
+    listing = client.get("/places")
+    assert listing.status_code == 200
+    assert "Bouzov" in listing.text
+    assert "Pustý zámek" not in listing.text
+    assert "Za návštěvu (1)" in listing.text
+    assert "Vše (2)" in listing.text
+    everything = client.get("/places?worth=all")
+    assert "Pustý zámek" in everything.text
+    assert 'name="worth" value="all"' in everything.text
 
 
 def test_mark_ruins_free_access(session: Session) -> None:

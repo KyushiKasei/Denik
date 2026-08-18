@@ -5,6 +5,8 @@ import {
   formatDiaryStatsLine,
   formatStars,
   formatVisitDate,
+  formatDateTime,
+  municipalityLine,
   listFavoriteRows,
   listVisitRows,
   listWantToVisitRows,
@@ -179,4 +181,12 @@ test("header statistika počítá návštěvy, unikátní místa a oblíbené", 
   );
   expect(stats).toEqual({ visitCount: 3, uniquePlaceCount: 2, favoriteCount: 1 });
   expect(formatDiaryStatsLine(stats)).toBe("3 návštěvy · 2 místa · 1 oblíbené");
+});
+
+test("datumy mají český tvar a obec se u názvu neopakuje", () => {
+  expect(formatVisitDate("2026-08-18")).toBe("18. 8. 2026");
+  expect(formatDateTime("2026-08-18T18:50:28+02:00")).toBe("18. 8. 2026 18:50");
+  expect(formatDateTime("2026-08-18T11:13:09.096Z")).toBe("18. 8. 2026 11:13");
+  expect(municipalityLine("Karlštejn", "Karlštejn")).toBe("");
+  expect(municipalityLine("Karlštejn", "Beroun")).toBe("Beroun");
 });

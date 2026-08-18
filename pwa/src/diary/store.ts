@@ -3,8 +3,20 @@ import { persistStorage } from "../storage/persist";
 import { db } from "../db";
 import { newVisitId, nowIso, todayIsoDate } from "./ids";
 import { mergePlaceStates, mergeTrips, mergeVisits } from "./merge";
+import { collapseFamilyVisits, reassignPhotos, unionFamilyStates } from "./familyMerge";
 import { DIARY_SCHEMA_VERSION, type Diary, type DiaryMergeCounts, type DiaryMeta, type StoredTrip, type TripOrigin } from "./types";
+import {
+  addVisitPhotoBlob,
+  loadAllPhotos,
+  MAX_PHOTO_BYTES,
+  MAX_PHOTOS_PER_VISIT,
+  mimeFromPhotoZipName,
+  parsePhotoZipPath,
+  photoCountForVisit,
+  photoZipPath,
+} from "./photos";
 import { validateDiary } from "./validate";
+import { createZip, readZip, type ZipEntry } from "./zip";
 
 const MAX_BACKUPS = 5;
 const ACTIVE_TRIP_KEY = "pamatky.activeTripId";
@@ -78,6 +90,7 @@ export async function addVisit(input: {
   rating: number | null;
   people: string;
   note: string | null;
+  trip_id?: string | null;
 }): Promise<StoredVisit> {
   const now = nowIso();
   const visit: StoredVisit = {
@@ -87,6 +100,7 @@ export async function addVisit(input: {
     rating: input.rating,
     people: parsePeople(input.people),
     note: input.note?.trim() ? input.note.trim() : null,
+    trip_id: input.trip_id ?? null,
     created_at: now,
     updated_at: now,
     deleted_at: null,
@@ -103,6 +117,7 @@ export async function updateVisit(
     rating: number | null;
     people: string;
     note: string | null;
+    trip_id?: string | null;
   },
 ): Promise<StoredVisit> {
   const visit = await db.visits.get(id);
@@ -115,6 +130,7 @@ export async function updateVisit(
     rating: input.rating,
     people: parsePeople(input.people),
     note: input.note?.trim() ? input.note.trim() : null,
+    trip_id: input.trip_id !== undefined ? input.trip_id : visit.trip_id ?? null,
     updated_at: nowIso(),
   };
   await db.visits.put(next);
@@ -168,21 +184,29 @@ export async function getTrip(id: string): Promise<StoredTrip | undefined> {
 }
 
 export function loadActiveTripId(): string | null {
-  if (typeof localStorage === "undefined") {
+  try {
+    if (typeof localStorage === "undefined") {
+      return null;
+    }
+    return localStorage.getItem(ACTIVE_TRIP_KEY);
+  } catch {
     return null;
   }
-  return localStorage.getItem(ACTIVE_TRIP_KEY);
 }
 
 export function saveActiveTripId(id: string | null): void {
-  if (typeof localStorage === "undefined") {
-    return;
+  try {
+    if (typeof localStorage === "undefined") {
+      return;
+    }
+    if (!id) {
+      localStorage.removeItem(ACTIVE_TRIP_KEY);
+      return;
+    }
+    localStorage.setItem(ACTIVE_TRIP_KEY, id);
+  } catch {
+    // private mode / quota
   }
-  if (!id) {
-    localStorage.removeItem(ACTIVE_TRIP_KEY);
-    return;
-  }
-  localStorage.setItem(ACTIVE_TRIP_KEY, id);
 }
 
 export async function createTrip(input: {
@@ -198,6 +222,7 @@ export async function createTrip(input: {
     planned_on: input.planned_on || todayIsoDate(),
     origin: input.origin ?? null,
     notes: input.notes?.trim() ? input.notes.trim() : null,
+    status: "planned",
     stops: [],
     created_at: now,
     updated_at: now,
@@ -211,7 +236,7 @@ export async function createTrip(input: {
 
 export async function updateTrip(
   id: string,
-  patch: Partial<Pick<StoredTrip, "name" | "planned_on" | "origin" | "notes" | "stops">>,
+  patch: Partial<Pick<StoredTrip, "name" | "planned_on" | "origin" | "notes" | "stops" | "status">>,
 ): Promise<StoredTrip> {
   const trip = await db.trips.get(id);
   if (!trip || trip.deleted_at) {
@@ -239,6 +264,24 @@ export async function softDeleteTrip(id: string): Promise<void> {
     saveActiveTripId(null);
   }
   await persistStorage();
+}
+
+export async function createTripFromPlaces(input: {
+  name: string;
+  planned_on?: string | null;
+  origin?: TripOrigin | null;
+  placeIds: string[];
+}): Promise<StoredTrip> {
+  const trip = await createTrip({
+    name: input.name,
+    planned_on: input.planned_on,
+    origin: input.origin ?? null,
+  });
+  let current = trip;
+  for (const placeId of input.placeIds) {
+    current = await addPlaceToTrip(current.id, placeId);
+  }
+  return current;
 }
 
 export async function addPlaceToTrip(tripId: string, placeId: string): Promise<StoredTrip> {
@@ -329,30 +372,69 @@ async function snapshotDiary(): Promise<void> {
   await Promise.all(extra.map((row) => (row.id != null ? db.diary_backups.delete(row.id) : Promise.resolve())));
 }
 
-export async function importDiary(diary: Diary): Promise<DiaryMergeCounts> {
+export async function importDiary(diary: Diary, options?: { family?: boolean }): Promise<DiaryMergeCounts> {
   validateDiary(diary);
   await snapshotDiary();
-  const [localVisits, localStates, localTrips] = await Promise.all([
+  const [localVisits, localStates, localTrips, photos] = await Promise.all([
     loadVisits(true),
     loadPlaceStates(true),
     loadTrips(true),
+    loadAllPhotos(),
   ]);
   const visits = mergeVisits(localVisits, diary.visits);
-  const states = mergePlaceStates(localStates, diary.place_states);
+  const states = options?.family
+    ? {
+        next: unionFamilyStates(localStates, diary.place_states),
+        counts: {
+          statesInserted: 0,
+          statesUpdated: 0,
+          statesUnchanged: 0,
+          warnings: [] as string[],
+        },
+      }
+    : mergePlaceStates(localStates, diary.place_states);
+  if (options?.family) {
+    const incomingIds = new Set(diary.place_states.map((row) => row.place_id));
+    let inserted = 0;
+    let updated = 0;
+    for (const row of diary.place_states) {
+      if (localStates.some((item) => item.place_id === row.place_id)) {
+        updated += 1;
+      } else {
+        inserted += 1;
+      }
+    }
+    states.counts.statesInserted = inserted;
+    states.counts.statesUpdated = updated;
+    states.counts.statesUnchanged = Math.max(0, localStates.length - incomingIds.size);
+  }
   const trips = mergeTrips(localTrips, diary.trips ?? []);
+  const photoCounts = new Map<string, number>();
+  for (const photo of photos) {
+    photoCounts.set(photo.visit_id, (photoCounts.get(photo.visit_id) ?? 0) + 1);
+  }
+  const family = options?.family ? collapseFamilyVisits(visits.next, photoCounts) : null;
+  const nextVisits = family ? family.next : visits.next;
+  const nextPhotos = family ? reassignPhotos(photos, family.photoMoves) : photos;
 
-  await db.transaction("rw", db.visits, db.place_states, db.trips, db.meta, async () => {
+  await db.transaction("rw", [db.visits, db.place_states, db.trips, db.visit_photos, db.meta], async () => {
     await db.visits.clear();
     await db.place_states.clear();
     await db.trips.clear();
-    if (visits.next.length > 0) {
-      await db.visits.bulkPut(visits.next);
+    if (nextVisits.length > 0) {
+      await db.visits.bulkPut(nextVisits);
     }
     if (states.next.length > 0) {
       await db.place_states.bulkPut(states.next);
     }
     if (trips.next.length > 0) {
       await db.trips.bulkPut(trips.next);
+    }
+    if (family && family.photoMoves.length > 0) {
+      await db.visit_photos.clear();
+      if (nextPhotos.length > 0) {
+        await db.visit_photos.bulkPut(nextPhotos);
+      }
     }
     await setMeta("last_diary_import_at", nowIso());
   });
@@ -368,6 +450,7 @@ export async function importDiary(diary: Diary): Promise<DiaryMergeCounts> {
     tripsInserted: trips.counts.tripsInserted,
     tripsUpdated: trips.counts.tripsUpdated,
     tripsUnchanged: trips.counts.tripsUnchanged,
+    familyCollapsed: family?.collapsed ?? 0,
     warnings: [...visits.counts.warnings, ...states.counts.warnings, ...trips.counts.warnings],
   };
 }
@@ -394,28 +477,26 @@ export async function loadDiaryMeta(): Promise<DiaryMeta> {
   };
 }
 
-function fallbackDownload(blob: Blob): void {
+function fallbackDownload(blob: Blob, filename = "diary.json"): void {
   if (typeof document === "undefined") {
     return;
   }
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = "diary.json";
+  anchor.download = filename;
   anchor.click();
   URL.revokeObjectURL(url);
 }
 
-export async function downloadDiaryFile(diary: Diary): Promise<void> {
-  const blob = new Blob([`${JSON.stringify(diary, null, 2)}\n`], { type: "application/json;charset=utf-8" });
-  const file = new File([blob], "diary.json", { type: "application/json" });
+async function shareOrDownload(file: File, blob: Blob): Promise<void> {
   if (typeof navigator !== "undefined") {
     const nav = navigator as Navigator & {
       canShare?: (data: ShareData) => boolean;
       share?: (data: ShareData) => Promise<void>;
     };
     if (typeof nav.share === "function") {
-      const payload: ShareData = { files: [file], title: "diary.json", text: "Záloha deníku Památky" };
+      const payload: ShareData = { files: [file], title: file.name, text: "Záloha deníku Památky" };
       let canShareFiles = true;
       if (typeof nav.canShare === "function") {
         try {
@@ -436,5 +517,70 @@ export async function downloadDiaryFile(diary: Diary): Promise<void> {
       }
     }
   }
-  fallbackDownload(blob);
+  fallbackDownload(blob, file.name);
 }
+
+export async function downloadDiaryFile(diary: Diary): Promise<void> {
+  const blob = new Blob([`${JSON.stringify(diary, null, 2)}\n`], { type: "application/json;charset=utf-8" });
+  const file = new File([blob], "diary.json", { type: "application/json" });
+  await shareOrDownload(file, blob);
+}
+
+export async function buildDiaryZip(diary: Diary): Promise<Blob> {
+  const photos = await loadAllPhotos();
+  const json = new TextEncoder().encode(`${JSON.stringify(diary, null, 2)}\n`);
+  const entries: ZipEntry[] = [{ name: "diary.json", data: json }];
+  for (const photo of photos) {
+    if (photo.blob.size > MAX_PHOTO_BYTES) {
+      continue;
+    }
+    const bytes = new Uint8Array(await photo.blob.arrayBuffer());
+    entries.push({ name: photoZipPath(photo), data: bytes });
+  }
+  const zip = createZip(entries);
+  return new Blob([zip], { type: "application/zip" });
+}
+
+export async function downloadDiaryBundle(): Promise<void> {
+  const diary = await exportDiary();
+  const photos = await loadAllPhotos();
+  if (photos.length === 0) {
+    await downloadDiaryFile(diary);
+    return;
+  }
+  const blob = await buildDiaryZip(diary);
+  const file = new File([blob], "diary.zip", { type: "application/zip" });
+  await shareOrDownload(file, blob);
+}
+
+export async function importDiaryPhotos(entries: ZipEntry[]): Promise<number> {
+  let imported = 0;
+  for (const entry of entries) {
+    const parsed = parsePhotoZipPath(entry.name);
+    if (!parsed || entry.data.byteLength > MAX_PHOTO_BYTES) {
+      continue;
+    }
+    const mime = mimeFromPhotoZipName(entry.name);
+    const blob = new Blob([entry.data], { type: mime });
+    await db.transaction("rw", db.visit_photos, async () => {
+      const existing = await db.visit_photos.get(parsed.photoId);
+      if (!existing) {
+        const count = await photoCountForVisit(parsed.visitId);
+        if (count >= MAX_PHOTOS_PER_VISIT) {
+          return;
+        }
+      }
+      await addVisitPhotoBlob(parsed.visitId, blob, parsed.photoId);
+      imported += 1;
+    });
+  }
+  if (imported > 0) {
+    await persistStorage();
+  }
+  return imported;
+}
+
+export function readZipEntries(bytes: Uint8Array): ZipEntry[] {
+  return readZip(bytes);
+}
+

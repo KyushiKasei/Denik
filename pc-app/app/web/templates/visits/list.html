@@ -3,6 +3,10 @@
 {% block content %}
 <div class="toolbar">
   <h1>Návštěvy</h1>
+  <div class="actions-row">
+    <a href="/diary" role="button" class="secondary">Pas s razítky</a>
+    <a href="/yearbook" role="button" class="secondary">Ročenka</a>
+  </div>
 </div>
 <p class="muted">Chronologický seznam z deníku na tomto počítači. Smazané záznamy zůstávají v databázi, jen se nezobrazují.</p>
 
@@ -60,16 +64,19 @@
     <table>
       <thead>
         <tr>
+          <th></th>
           <th>Datum</th>
           <th>Místo</th>
           <th>Hodnocení</th>
           <th>Kdo tam byl</th>
           <th>Poznámka</th>
+          <th>Fotky</th>
         </tr>
       </thead>
       <tbody>
         {% for visit in result.visits %}
         <tr>
+          <td class="stamp-cell">{{ visit_stamp_svg(visit, size=40) }}</td>
           <td>{{ visit.visited_at or "—" }}{% if visit.is_deleted %} <span class="badge badge-muted">smazáno</span>{% endif %}</td>
           <td>
             {% if visit.place %}
@@ -82,6 +89,13 @@
           <td>{% if visit.rating %}{{ visit.rating }} / 5{% else %}—{% endif %}</td>
           <td>{{ visit.people | join(", ") if visit.people else "—" }}</td>
           <td>{{ visit.note or "—" }}</td>
+          <td>
+            {% for name in (visit_photos or {}).get(visit.public_id, []) %}
+            <a href="/visit-photos/{{ visit.public_id }}/{{ name }}" target="_blank" rel="noopener">
+              <img src="/visit-photos/{{ visit.public_id }}/{{ name }}" alt="" class="visit-thumb">
+            </a>
+            {% endfor %}
+          </td>
         </tr>
         {% endfor %}
       </tbody>

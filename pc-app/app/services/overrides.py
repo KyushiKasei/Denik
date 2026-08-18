@@ -34,6 +34,18 @@ OVERRIDEABLE_FIELDS = (
     "wikipedia_url",
     "opening_hours_url",
     "ticket_url",
+    "osm_opening_hours",
+    "phone",
+    "fee",
+    "wheelchair",
+    "parking",
+    "visit_duration_minutes",
+    "last_entry",
+    "dogs",
+    "payment",
+    "amenities",
+    "inception_year",
+    "architectural_style",
     "types",
 )
 
@@ -61,6 +73,18 @@ FIELD_LABELS_CS = {
     "wikipedia_url": "Wikipedia",
     "opening_hours_url": "Otevírací doba",
     "ticket_url": "Vstupenky",
+    "osm_opening_hours": "OSM hodiny",
+    "phone": "Telefon",
+    "fee": "Vstupné",
+    "wheelchair": "Bezbariérovost",
+    "parking": "Parkování",
+    "visit_duration_minutes": "Délka prohlídky (min)",
+    "last_entry": "Poslední vstup",
+    "dogs": "Psi",
+    "payment": "Platba",
+    "amenities": "Zázemí",
+    "inception_year": "Rok vzniku",
+    "architectural_style": "Sloh",
     "types": "Typy",
 }
 
@@ -90,6 +114,18 @@ def snapshot_place(place: Place) -> dict[str, Any]:
         "wikipedia_url": place.wikipedia_url,
         "opening_hours_url": place.opening_hours_url,
         "ticket_url": place.ticket_url,
+        "osm_opening_hours": place.osm_opening_hours,
+        "phone": place.phone,
+        "fee": place.fee,
+        "wheelchair": place.wheelchair,
+        "parking": place.parking,
+        "visit_duration_minutes": place.visit_duration_minutes,
+        "last_entry": place.last_entry,
+        "dogs": place.dogs,
+        "payment": place.payment,
+        "amenities": place.amenity_codes,
+        "inception_year": place.inception_year,
+        "architectural_style": place.architectural_style,
         "types": [item.code for item in place.types],
     }
 
@@ -162,6 +198,10 @@ def apply_value_to_place(place: Place, field_name: str, value: Any, session: Ses
         return
     if field_name == "alternative_names":
         place.alternative_names = encode_value(value if isinstance(value, list) else [])
+        return
+    if field_name == "amenities":
+        codes = [str(item) for item in (value or []) if str(item) in {"toilets", "cafe", "playground"}]
+        place.amenities = encode_value(list(dict.fromkeys(codes)))
         return
     if field_name == "unesco":
         place.unesco = 1 if value in (1, True, "1", "true") else 0

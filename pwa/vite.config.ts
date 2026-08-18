@@ -36,6 +36,22 @@ export default defineConfig({
         orientation: "portrait",
         start_url: "/",
         scope: "/",
+        share_target: {
+          action: "/share",
+          method: "POST",
+          enctype: "multipart/form-data",
+          params: {
+            title: "title",
+            text: "text",
+            url: "url",
+            files: [
+              {
+                name: "media",
+                accept: ["image/*"],
+              },
+            ],
+          },
+        },
         categories: ["travel", "navigation"],
         icons: [
           {
@@ -59,6 +75,7 @@ export default defineConfig({
         ],
       },
       workbox: {
+        importScripts: ["share-target-sw.js"],
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
         navigateFallback: "/index.html",
         navigateFallbackDenylist: [/^\/_/, /\/[^/?]+\.[^/]+$/],
@@ -86,7 +103,7 @@ export default defineConfig({
             handler: "NetworkFirst",
             options: {
               cacheName: "commons-images",
-              expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 * 14 },
+              expiration: { maxEntries: 240, maxAgeSeconds: 60 * 60 * 24 * 14 },
               cacheableResponse: { statuses: [0, 200] },
             },
           },

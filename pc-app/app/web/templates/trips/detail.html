@@ -46,10 +46,10 @@
       </div>
       <div class="actions-row trip-row-actions">
         <form method="post" action="/trips/{{ trip.public_id }}/stops/{{ stop.place_public_id }}/up">
-          <button type="submit" class="secondary" {% if loop.first %}disabled{% endif %}>↑</button>
+          <button type="submit" class="secondary" aria-label="Posunout nahoru"{% if loop.first %} disabled{% endif %}>↑</button>
         </form>
         <form method="post" action="/trips/{{ trip.public_id }}/stops/{{ stop.place_public_id }}/down">
-          <button type="submit" class="secondary" {% if loop.last %}disabled{% endif %}>↓</button>
+          <button type="submit" class="secondary" aria-label="Posunout dolů"{% if loop.last %} disabled{% endif %}>↓</button>
         </form>
         <form method="post" action="/trips/{{ trip.public_id }}/stops/{{ stop.place_public_id }}/delete">
           <button type="submit" class="secondary">Odebrat</button>

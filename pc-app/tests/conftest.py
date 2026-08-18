@@ -27,12 +27,17 @@ def session(tmp_path: Path) -> Session:
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setenv("PAMATKY_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("PAMATKY_LAN_LISTEN", "0")
     reset_engine()
     from app.main import app
     from app.services.import_job import reset_job_state
 
     reset_job_state()
+    from app.services.lan_sync import reset_lan_state
+
+    reset_lan_state()
     with TestClient(app) as test_client:
         yield test_client
     reset_job_state()
+    reset_lan_state()
     reset_engine()

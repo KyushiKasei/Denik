@@ -10,17 +10,30 @@ from sqlalchemy.orm import Session
 from app.db.models import Place, PlacePhoto, PlaceSource
 from app.importers.base import CanonicalRecord
 from app.importers.wikidata.client import ENDPOINT, USER_AGENT, SparqlError, WikidataClient
-from app.importers.wikidata.importer import SAMPLE_SPARQL_FIXTURE, fetch_summary, load_bundle_file, records_from_file
+from app.importers.wikidata.importer import (
+    SAMPLE_SPARQL_FIXTURE,
+    fetch_summary,
+    fetch_wikidata_records,
+    load_bundle_file,
+    qids_needing_p18,
+    records_from_file,
+)
 from app.importers.wikidata.parser import (
+    apply_condition_bindings,
+    apply_style_bindings,
     compose_address,
+    condition_from_binding,
     count_without_gps,
     image_from_p18,
+    inception_year_from_value,
     parse_sparql_response,
     parse_wkt_point,
+    prefer_condition,
     qid_from_uri,
+    qids_in_bundle,
     records_from_bundle,
 )
-from app.importers.wikidata.query import TYPE_CLASSES, build_query
+from app.importers.wikidata.query import TYPE_CLASSES, build_condition_query, build_items_query, build_query, build_style_query
 from app.services.apply_import import apply_import
 
 
@@ -32,7 +45,8 @@ def _by_qid(records: list[CanonicalRecord]) -> dict[str, CanonicalRecord]:
     return {item.external_id: item for item in records}
 
 
-def test_type_classes_include_lookout_zoo_and_cave() -> None:
+def test_type_classes_include_palace_lookout_zoo_and_cave() -> None:
+    assert TYPE_CLASSES["PALACE"] == "Q16560"
     assert TYPE_CLASSES["LOOKOUT_TOWER"] == "Q1440300"
     assert TYPE_CLASSES["ZOO"] == "Q43501"
     assert TYPE_CLASSES["CAVE"] == "Q35509"
@@ -51,6 +65,69 @@ def test_build_query_includes_class_and_mapped_properties() -> None:
     assert "cs.wikipedia.org" in query
     with pytest.raises(ValueError):
         build_query("not-a-qid")
+
+
+def test_build_items_query_uses_values_not_type_class() -> None:
+    query = build_items_query(["Q10857973", "Q122922"])
+    assert "VALUES ?item { wd:Q10857973 wd:Q122922 }" in query
+    assert "wdt:P18" in query
+    assert "?item wdt:P31" not in query
+    assert "P131" not in query
+    with pytest.raises(ValueError):
+        build_items_query([])
+    with pytest.raises(ValueError):
+        build_items_query(["not-qid"])
+
+
+def test_build_condition_query_is_batched_values() -> None:
+    query = build_condition_query(["Q122922", "Q214651"])
+    assert "VALUES ?item { wd:Q122922 wd:Q214651 }" in query
+    assert "wdt:P5816" in query
+    assert "wdt:P576" in query
+    assert "wd:Q177751" in query
+    assert "P131" not in query
+    with pytest.raises(ValueError):
+        build_condition_query([])
+
+
+def test_build_style_query_is_batched_values() -> None:
+    query = build_style_query(["Q122922", "Q214651"])
+    assert "VALUES ?item { wd:Q122922 wd:Q214651 }" in query
+    assert "wdt:P571" in query
+    assert "wdt:P149" in query
+    assert "P131" not in query
+    with pytest.raises(ValueError):
+        build_style_query([])
+
+
+def test_inception_year_from_value() -> None:
+    assert inception_year_from_value("+1310-00-00T00:00:00Z") == 1310
+    assert inception_year_from_value("gotika 14. století") is None
+    assert inception_year_from_value("50") is None
+    assert inception_year_from_value(None) is None
+
+
+def test_apply_style_bindings_sets_year_and_style() -> None:
+    record = CanonicalRecord(
+        source_type="wikidata",
+        external_id="Q122922",
+        name="Bouzov",
+        fetched_at="t",
+    )
+    payload = {
+        "results": {
+            "bindings": [
+                {
+                    "item": {"type": "uri", "value": "http://www.wikidata.org/entity/Q122922"},
+                    "inception": {"type": "literal", "value": "+1310-01-01T00:00:00Z"},
+                    "styleLabel": {"xml:lang": "cs", "type": "literal", "value": "gotika"},
+                }
+            ]
+        }
+    }
+    assert apply_style_bindings([record], payload) == 1
+    assert record.inception_year == 1310
+    assert record.architectural_style == "gotika"
 
 
 def test_parse_wkt_point() -> None:
@@ -107,6 +184,7 @@ def test_parse_sparql_json_from_fixture() -> None:
     testhrad = by_qid["Q999000002"]
     assert testhrad.types == ["RUIN"]
     assert testhrad.visitability == "FREE_ACCESS"
+    assert testhrad.condition == "RUIN"
 
     tvrz = by_qid["Q999000003"]
     assert tvrz.types == ["MANOR"]
@@ -121,6 +199,65 @@ def test_invalid_sparql_json_raises() -> None:
 def test_qid_from_uri() -> None:
     assert qid_from_uri("http://www.wikidata.org/entity/Q122922") == "Q122922"
     assert qid_from_uri("not-qid") is None
+
+
+def test_condition_from_wikidata_conservation_and_demolition() -> None:
+    preserved = {
+        "conservation": {"type": "uri", "value": "http://www.wikidata.org/entity/Q56556832"},
+    }
+    demolished = {
+        "conservation": {"type": "uri", "value": "http://www.wikidata.org/entity/Q56689024"},
+    }
+    dissolved = {"dissolved": {"type": "literal", "value": "1600-01-01"}}
+    archaeology = {
+        "goneClass": {"type": "uri", "value": "http://www.wikidata.org/entity/Q839818"},
+    }
+    assert condition_from_binding(preserved) == "PRESERVED"
+    assert condition_from_binding(demolished) == "EXTINCT"
+    assert condition_from_binding(dissolved) == "EXTINCT"
+    assert condition_from_binding(archaeology) == "REMAINS"
+    assert condition_from_binding({}, extra_type="RUIN") == "RUIN"
+    assert condition_from_binding({}, extra_type="CASTLE") is None
+    assert prefer_condition("PRESERVED", "EXTINCT") == "EXTINCT"
+
+
+def test_apply_condition_bindings_merges_onto_records() -> None:
+    records = _sample_records()
+    testhrad = next(item for item in records if item.external_id == "Q999000002")
+    assert testhrad.condition == "RUIN"
+    updated = apply_condition_bindings(
+        records,
+        {
+            "results": {
+                "bindings": [
+                    {
+                        "item": {"type": "uri", "value": "http://www.wikidata.org/entity/Q999000002"},
+                        "dissolved": {"type": "literal", "value": "1600-01-01"},
+                    }
+                ]
+            }
+        },
+    )
+    assert updated == 1
+    assert testhrad.condition == "EXTINCT"
+
+
+def test_manual_condition_override_survives_wikidata_import(session: Session) -> None:
+    from app.services.places import PlaceInput, update_place
+
+    records = _sample_records()
+    apply_import(session, records, "wikidata", make_backup=True)
+    testhrad = session.scalar(select(Place).where(Place.name == "Zřícenina Testhrad"))
+    assert testhrad is not None
+    assert testhrad.condition == "RUIN"
+    data = PlaceInput.from_place(testhrad)
+    data.condition = "PRESERVED"
+    update_place(session, testhrad, data)
+    session.refresh(testhrad)
+    assert testhrad.condition == "PRESERVED"
+    apply_import(session, records, "wikidata", make_backup=True)
+    session.refresh(testhrad)
+    assert testhrad.condition == "PRESERVED"
 
 
 def test_image_from_p18() -> None:
@@ -146,6 +283,7 @@ def test_qid_saved_as_place_source(session: Session) -> None:
     testhrad = session.scalar(select(Place).where(Place.name == "Zřícenina Testhrad"))
     assert testhrad is not None
     assert testhrad.visitability == "FREE_ACCESS"
+    assert testhrad.condition == "RUIN"
     uskp = session.scalar(
         select(PlaceSource).where(PlaceSource.source_type == "uskp", PlaceSource.external_id == "19895/8-2468")
     )
@@ -277,6 +415,22 @@ def test_client_retries_timeout_then_succeeds() -> None:
     assert "results" in data
 
 
+def test_client_retries_incomplete_chunked_read() -> None:
+    payload = load_bundle_file(SAMPLE_SPARQL_FIXTURE)
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise httpx.RemoteProtocolError("incomplete chunked read")
+        return httpx.Response(200, json=payload["PALACE"])
+
+    client = WikidataClient(transport=httpx.MockTransport(handler), sleep=lambda _s: None)
+    data = client.fetch_class("Q16560")
+    assert calls["n"] == 2
+    assert "results" in data
+
+
 def test_client_gives_up_after_retries() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ReadTimeout("still slow", request=request)
@@ -324,3 +478,124 @@ def test_records_from_single_sparql_response() -> None:
     castle = load_bundle_file(SAMPLE_SPARQL_FIXTURE)["CASTLE"]
     records = parse_sparql_response(castle, extra_type="CASTLE", fetched_at="t")
     assert {item.external_id for item in records} == {"Q122922", "Q214651", "Q1010040", "Q999000001"}
+
+
+def _palace_p18_sparql() -> dict:
+    return {
+        "head": {"vars": ["item", "itemLabel", "image"]},
+        "results": {
+            "bindings": [
+                {
+                    "item": {"type": "uri", "value": "http://www.wikidata.org/entity/Q10857973"},
+                    "itemLabel": {"xml:lang": "cs", "type": "literal", "value": "Zdíkův palác"},
+                    "image": {
+                        "type": "uri",
+                        "value": "http://commons.wikimedia.org/wiki/Special:FilePath/Zdikuv%20palac6.JPG",
+                    },
+                }
+            ]
+        },
+    }
+
+
+def test_palace_sparql_maps_p18_and_type() -> None:
+    records = parse_sparql_response(_palace_p18_sparql(), extra_type="PALACE", fetched_at="t")
+    assert len(records) == 1
+    palace = records[0]
+    assert palace.types == ["PALACE"]
+    assert palace.image is not None
+    assert "Zdikuv_palac6.JPG" in palace.image["thumbnail_url"]
+
+
+def test_existing_qids_bundle_fills_image_without_creating() -> None:
+    bundle = load_bundle_file(SAMPLE_SPARQL_FIXTURE)
+    bundle["EXISTING_QIDS"] = _palace_p18_sparql()
+    records = records_from_bundle(bundle, "t")
+    palace = _by_qid(records)["Q10857973"]
+    assert palace.types == []
+    assert palace.allow_create is False
+    assert palace.image is not None
+    assert qids_in_bundle(bundle) >= {"Q10857973", "Q122922"}
+
+
+def test_qids_needing_p18_skips_known_and_photographed(session: Session) -> None:
+    bare = Place(name="Zdíkův palác")
+    with_photo = Place(name="Bouzov")
+    session.add_all([bare, with_photo])
+    session.flush()
+    session.add(PlaceSource(place_id=bare.id, source_type="wikidata", external_id="Q10857973", created_at="t", updated_at="t"))
+    session.add(PlaceSource(place_id=with_photo.id, source_type="wikidata", external_id="Q122922", created_at="t", updated_at="t"))
+    session.add(
+        PlacePhoto(
+            place_id=with_photo.id,
+            source="wikimedia_commons",
+            thumbnail_url="https://commons.wikimedia.org/wiki/Special:FilePath/Hrad_Bouzov.jpg?width=640",
+            created_at="t",
+        )
+    )
+    session.commit()
+    assert qids_needing_p18(session, set()) == ["Q10857973"]
+    assert qids_needing_p18(session, {"Q10857973"}) == []
+
+
+def test_client_fetches_existing_qids_in_values_query() -> None:
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = unquote_plus(request.content.decode())
+        assert "VALUES ?item { wd:Q10857973 }" in body
+        assert "?item wdt:P31" not in body
+        seen.append("items")
+        return httpx.Response(200, json=_palace_p18_sparql())
+
+    client = WikidataClient(transport=httpx.MockTransport(handler), sleep=lambda _s: None)
+    payload = client.fetch_items(["Q10857973"])
+    assert seen == ["items"]
+    assert payload["results"]["bindings"][0]["item"]["value"].endswith("Q10857973")
+    empty = client.fetch_items([])
+    assert empty["results"]["bindings"] == []
+
+
+def test_fetch_backfills_p18_for_qid_outside_type_classes(session: Session, tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("PAMATKY_DATA_DIR", str(tmp_path))
+    from app.config import ensure_data_dir
+
+    ensure_data_dir()
+    place = Place(name="Zdíkův palác")
+    session.add(place)
+    session.flush()
+    session.add(PlaceSource(place_id=place.id, source_type="wikidata", external_id="Q10857973", created_at="t", updated_at="t"))
+    session.commit()
+
+    type_payload = load_bundle_file(SAMPLE_SPARQL_FIXTURE)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = unquote_plus(request.content.decode())
+        if "VALUES ?item" in body:
+            if "wdt:P18" in body:
+                assert "wd:Q10857973" in body
+                return httpx.Response(200, json=_palace_p18_sparql())
+            return httpx.Response(200, json={"results": {"bindings": []}})
+        matched = None
+        for type_code, class_qid in TYPE_CLASSES.items():
+            if f"wd:{class_qid}" in body and "wdt:P31" in body:
+                matched = type_code
+                break
+        assert matched is not None
+        return httpx.Response(200, json=type_payload[matched])
+
+    client = WikidataClient(transport=httpx.MockTransport(handler), sleep=lambda _s: None)
+    records = fetch_wikidata_records(client=client, session=session)
+    palace = _by_qid(records)["Q10857973"]
+    assert palace.image is not None
+    assert "Zdikuv_palac6.JPG" in palace.image["thumbnail_url"]
+    assert palace.allow_create is False
+
+    result = apply_import(session, records, "wikidata", make_backup=True)
+    assert result.records_created == 6
+    session.refresh(place)
+    photo = session.scalar(select(PlacePhoto).where(PlacePhoto.place_id == place.id))
+    assert photo is not None
+    assert photo.thumbnail_url is not None
+    assert "Zdikuv_palac6.JPG" in photo.thumbnail_url
+    assert place.public_id

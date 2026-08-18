@@ -1,9 +1,11 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { getPlace, getPlaceSnapshot } from "../catalog/importCatalog";
+import { getPlace, getPlaceSnapshot, loadPlaces } from "../catalog/importCatalog";
 import {
   appleMapsUrl,
   conditionLabel,
+  displayPlaceName,
+  feeLabel,
   formatGps,
   formatTypes,
   googleMapsUrl,
@@ -11,13 +13,26 @@ import {
   heritageLabel,
   locationLine,
   mapyCzUrl,
+  parkingLabel,
+  amenitiesLine,
+  dogsLabel,
+  paymentLabel,
+  publicDescription,
+  styleLine,
+  phoneHref,
   visitabilityLabel,
+  wheelchairLabel,
 } from "../catalog/labels";
 import type { CatalogPlace, PlaceNameSnapshot } from "../catalog/types";
 import { PlaceJournal } from "../components/PlaceJournal";
+import { HoursBadge } from "../components/HoursBadge";
 import { RouteLinks } from "../components/RouteLinks";
+import { hoursLineForPlace } from "../catalog/openingHours";
 import { isOrphanPlace } from "../diary/orphans";
 import { loadStoredMapView } from "../geo/mapOriginStore";
+import { loadVisits } from "../diary/store";
+import { similarPlaces } from "../diary/similarPlaces";
+import { PlaceCard } from "../components/PlaceCard";
 
 const PlaceMap = lazy(async () => {
   const module = await import("../components/PlaceMap");
@@ -36,7 +51,7 @@ const LINK_LABELS: Array<[keyof CatalogPlace["links"], string]> = [
 function cameFrom(
   searchParams: URLSearchParams,
   state: unknown,
-  page: "map" | "diary",
+  page: "map" | "diary" | "today",
 ): boolean {
   if (searchParams.get("from") === page) {
     return true;
@@ -50,13 +65,16 @@ function cameFrom(
   if (page === "diary" && typeof document !== "undefined" && /\/diary(\?|#|$)/.test(document.referrer)) {
     return true;
   }
+  if (page === "today" && typeof document !== "undefined" && /\/(\?|#|$)/.test(document.referrer)) {
+    return true;
+  }
   return false;
 }
 
-function BackLink({ fromMap, fromDiary }: { fromMap: boolean; fromDiary: boolean }) {
+function BackLink({ fromMap, fromDiary, fromToday }: { fromMap: boolean; fromDiary: boolean; fromToday: boolean }) {
   const navigate = useNavigate();
-  const label = fromMap ? "← Mapa" : fromDiary ? "← Deník" : "← Katalog";
-  const fallback = fromMap ? "/map" : fromDiary ? "/diary" : "/";
+  const label = fromMap ? "← Mapa" : fromDiary ? "← Deník" : fromToday ? "← Dnes" : "← Katalog";
+  const fallback = fromMap ? "/map" : fromDiary ? "/diary" : fromToday ? "/" : "/catalog";
   return (
     <p className="back">
       <button
@@ -82,7 +100,9 @@ export function PlaceDetailPage() {
   const [searchParams] = useSearchParams();
   const fromMap = cameFrom(searchParams, location.state, "map");
   const fromDiary = cameFrom(searchParams, location.state, "diary");
+  const fromToday = cameFrom(searchParams, location.state, "today");
   const [place, setPlace] = useState<CatalogPlace | null | undefined>(undefined);
+  const [similar, setSimilar] = useState<CatalogPlace[]>([]);
   const [orphan, setOrphan] = useState(false);
   const [snapshot, setSnapshot] = useState<PlaceNameSnapshot | undefined>(undefined);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -108,6 +128,10 @@ export function PlaceDetailPage() {
           setOrphan(false);
           setSnapshot(undefined);
           setLoadError(null);
+          const [catalog, visits] = await Promise.all([loadPlaces(), loadVisits()]);
+          if (!cancelled) {
+            setSimilar(similarPlaces(row, catalog, visits));
+          }
           return;
         }
         const [orphaned, lastKnown] = await Promise.all([isOrphanPlace(id), getPlaceSnapshot(id)]);
@@ -150,7 +174,7 @@ export function PlaceDetailPage() {
   if (!place && orphan && id) {
     return (
       <article className="place-detail">
-        <BackLink fromMap={fromMap} fromDiary={fromDiary} />
+        <BackLink fromMap={fromMap} fromDiary={fromDiary} fromToday={fromToday} />
         <p className="orphan-banner" role="status">
           Místo už není v katalogu. Návštěvy zůstávají.
         </p>
@@ -161,7 +185,7 @@ export function PlaceDetailPage() {
         </p>
         <PlaceJournal placeId={id} />
         <p>
-          <Link to="/">Zpět na seznam</Link>
+          <Link to="/catalog">Zpět na seznam</Link>
         </p>
       </article>
     );
@@ -171,13 +195,22 @@ export function PlaceDetailPage() {
       <section>
         <p>Místo v katalogu není.</p>
         <p>
-          <Link to="/">Zpět na seznam</Link>
+          <Link to="/catalog">Zpět na seznam</Link>
         </p>
       </section>
     );
   }
 
   const gps = formatGps(place);
+  const hoursLine = hoursLineForPlace(place);
+  const phone = phoneHref(place.phone);
+  const fee = feeLabel(place.fee);
+  const wheelchair = wheelchairLabel(place.wheelchair);
+  const parking = parkingLabel(place.parking);
+  const dogs = dogsLabel(place.dogs);
+  const payment = paymentLabel(place.payment);
+  const amenities = amenitiesLine(place);
+  const style = styleLine(place);
   const mapy = mapyCzUrl(place);
   const gmaps = googleMapsUrl(place);
   const apple = appleMapsUrl(place);
@@ -185,10 +218,12 @@ export function PlaceDetailPage() {
 
   return (
     <article className="place-detail">
-      <BackLink fromMap={fromMap} fromDiary={fromDiary} />
-      <h1>{place.name}</h1>
+      <BackLink fromMap={fromMap} fromDiary={fromDiary} fromToday={fromToday} />
+      <h1>{displayPlaceName(place.name)}</h1>
       {place.short_name ? <p className="muted">{place.short_name}</p> : null}
-      <p className="place-types">{formatTypes(place.types)}</p>
+      {formatTypes(place.types, { hideInName: place.name }) ? (
+        <p className="place-types">{formatTypes(place.types, { hideInName: place.name })}</p>
+      ) : null}
       {locationLine(place) ? <p>{locationLine(place)}</p> : null}
 
       {place.image?.thumbnail_url ? (
@@ -211,7 +246,7 @@ export function PlaceDetailPage() {
         </figure>
       ) : null}
 
-      {place.short_description ? <p>{place.short_description}</p> : null}
+      {publicDescription(place) ? <p>{publicDescription(place)}</p> : null}
 
       <PlaceJournal placeId={place.id} />
 
@@ -219,7 +254,67 @@ export function PlaceDetailPage() {
         <dt>Stav</dt>
         <dd>{conditionLabel(place.condition)}</dd>
         <dt>Přístupnost</dt>
-        <dd>{visitabilityLabel(place.visitability)}</dd>
+        <dd>
+          {visitabilityLabel(place.visitability)}
+          {" "}
+          <HoursBadge place={place} />
+        </dd>
+        {hoursLine ? (
+          <>
+            <dt>Hodiny</dt>
+            <dd>{hoursLine}</dd>
+          </>
+        ) : null}
+        {place.phone ? (
+          <>
+            <dt>Telefon</dt>
+            <dd>
+              {phone ? <a href={phone}>{place.phone}</a> : place.phone}
+            </dd>
+          </>
+        ) : null}
+        {fee ? (
+          <>
+            <dt>Vstupné</dt>
+            <dd>{fee}</dd>
+          </>
+        ) : null}
+        {wheelchair ? (
+          <>
+            <dt>Bezbariérovost</dt>
+            <dd>{wheelchair}</dd>
+          </>
+        ) : null}
+        {parking ? (
+          <>
+            <dt>Parkování</dt>
+            <dd>{parking}</dd>
+          </>
+        ) : null}
+        {dogs ? (
+          <>
+            <dt>Psi</dt>
+            <dd>{dogs}</dd>
+          </>
+        ) : null}
+        {payment ? (
+          <>
+            <dt>Platba</dt>
+            <dd>{payment}</dd>
+          </>
+        ) : null}
+        {amenities ? (
+          <>
+            <dt>Zázemí</dt>
+            <dd>{amenities}</dd>
+          </>
+        ) : null}
+        {style ? (
+          <>
+            <dt>Sloh</dt>
+            <dd>{style}</dd>
+          </>
+        ) : null}
         <dt>Ochrana</dt>
         <dd>{heritageLabel(place.heritage_status)}</dd>
         <dt>UNESCO</dt>
@@ -232,6 +327,12 @@ export function PlaceDetailPage() {
         ) : null}
         <dt>GPS</dt>
         <dd>{gps ?? "chybí"}</dd>
+        {place.osm_opening_hours && !hoursLine ? (
+          <>
+            <dt>OSM hodiny</dt>
+            <dd>{place.osm_opening_hours}</dd>
+          </>
+        ) : null}
       </dl>
 
       {place.alternative_names.length > 0 ? (
@@ -272,6 +373,17 @@ export function PlaceDetailPage() {
       ) : (
         <p className="muted">Souřadnice chybí, místo je jen v seznamu.</p>
       )}
+
+      {similar.length > 0 ? (
+        <section className="today-block">
+          <h2>Podobná místa</h2>
+          <div className="place-cards">
+            {similar.map((row) => (
+              <PlaceCard key={row.id} place={row} to={`/place/${row.id}?from=today`} />
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {links.length > 0 ? (
         <section>

@@ -31,6 +31,9 @@ class NearbyHit:
     want_to_visit: bool
 
 
+MAX_NEARBY_HITS = 200
+
+
 @dataclass
 class NearbyResult:
     origin: Origin | None
@@ -38,6 +41,7 @@ class NearbyResult:
     hits: list[NearbyHit]
     skipped_no_gps: int
     error: str | None = None
+    hits_total: int = 0
 
 
 def _parse_optional_coord(raw: Any, kind: str) -> float | None:
@@ -243,6 +247,7 @@ def list_nearby(
         visitability=visitability.strip(),
         journal=journal.strip(),
         archived="active",
+        worth=False,
     )
     min_lat, max_lat, min_lon, max_lon = bounding_box(origin.latitude, origin.longitude, radius)
     stmt = _apply_filters(select(Place), filters).where(
@@ -263,4 +268,11 @@ def list_nearby(
         want = bool(place.journal_state and place.journal_state.want_to_visit and not place.journal_state.deleted_at)
         hits.append(NearbyHit(place=place, km=km, visited=visited, want_to_visit=want))
     hits.sort(key=lambda item: (item.km, item.place.name.lower()))
-    return NearbyResult(origin=origin, radius_km=radius, hits=hits, skipped_no_gps=skipped)
+    total = len(hits)
+    return NearbyResult(
+        origin=origin,
+        radius_km=radius,
+        hits=hits[:MAX_NEARBY_HITS],
+        skipped_no_gps=skipped,
+        hits_total=total,
+    )

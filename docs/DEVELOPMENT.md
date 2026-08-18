@@ -13,7 +13,7 @@
 
 Skript vytvoří `.venv`, nainstaluje balíček a spustí Uvicorn na `http://127.0.0.1:8765`.
 
-- `/` — dashboard nad katalogem i deníkem (počty návštěv), export `catalog.json` / `diary.json`, import deníku
+- `/` — dashboard nad katalogem i deníkem (počty návštěv), export `catalog.json` / `diary.json`, import deníku, složka pro telefon, volitelná domácí Wi-Fi
 - `/places` — seznam, hledání, filtry včetně navštíveno / chci navštívit, stránkování, export `catalog.json`
 - `/places/{id}` — detail místa: zápis návštěv a osobního stavu deníku (stejná pole jako PWA)
 - `/visits` — seznam návštěv
@@ -23,6 +23,10 @@ Skript vytvoří `.venv`, nainstaluje balíček a spustí Uvicorn na `http://127
 - `/import` — Import centrum (Wikidata, Památkový katalog, RÚIAN, NPÚ, Commons, Wikipedia, volitelné OSM, fixture)
 - `/import/reviews` — fronta nejasných shod; tlačítko přepočítá otevřené položky podle aktuálních pravidel B (se zálohou)
 - `/backup` — ruční záloha a obnova SQLite
+
+Domácí relace (výchozí vypnuto): na přehledu „Povolit domácí síť na 15 min“. Druhý listener na `0.0.0.0:8766` má jen `/lan` (PIN, upload deníku, stažení sloučeného `diary.zip` a `catalog.json`). QR otevře Safari, nespáruje PWA. Admin UI na `127.0.0.1:8765` se na LAN neotevře. Windows firewall: povolit jen soukromé sítě. Guest Wi-Fi s izolací klientů telefon k PC nepustí.
+
+Složka pro telefon (Dropbox / USB, ne živá SQLite): na přehledu jednou uložíte cestu. Telefon sem dá `diary.zip` nebo `diary.json`, tlačítko „Sloučit deník ze složky“ zapíše `diary-z-pc.zip`. Katalog jen na vyžádání jako `catalog.json`. Není to Dropbox API ani sledování složky.
 
 Export z příkazové řádky:
 
@@ -45,6 +49,7 @@ Výchozí (vývoj v Dropboxu):
 ```text
 %LOCALAPPDATA%\PamatkyDenik\
   pamatky.sqlite3
+  exchange.json            # cesta ke složce pro telefon (Dropbox/USB), ne data deníku
   backups\
   logs\
   export\
@@ -63,7 +68,7 @@ Výchozí (vývoj v Dropboxu):
 
 Log založení / úpravy / archivace: `logs\pc-app.log`.
 
-Wikidata import na `/import` nebo `python -m app.cli import-source wikidata` stahuje SPARQL po typech (hrad, zámek, zřícenina, tvrz, rozhledna, zoo, jeskyně). Může trvat několik minut. Tvrz je Wikidata `Q1408475` (fortified house); QID `Q2288643` ze staršího zadání je lékařská položka. Rozhledna je `Q1440300`, zoo `Q43501`, jeskyně `Q35509`.
+Wikidata import na `/import` nebo `python -m app.cli import-source wikidata` stahuje SPARQL po typech (hrad, zámek, zřícenina, tvrz, palác, rozhledna, zoo, jeskyně). Může trvat několik minut. Tvrz je Wikidata `Q1408475` (fortified house); QID `Q2288643` ze staršího zadání je lékařská položka. Palác je `Q16560`, rozhledna `Q1440300`, zoo `Q43501`, jeskyně `Q35509`. Místa s QID mimo tyto třídy dostanou P18 fotku doplňkovým SPARQL.
 
 Další zdroje ve stejném Import centru: Památkový katalog (CSV), RÚIAN (kódy obce/okresu/kraje a obec ze souřadnic), NPÚ spravované objekty (URL, ne texty), Commons metadata k P18, Wikipedia URL/úplnost, OSM jako volitelný doplněk.
 
@@ -95,7 +100,7 @@ Aplikace volá `upgrade head` při startu. Fáze 8 přidala migraci `004_phase8_
 .\scripts\start-pwa.ps1
 ```
 
-Dev server: `http://127.0.0.1:5173`. Záložky: Katalog, Mapa (Poblíž), Soubory, Info. Offline shell ověř `npm run build` a `npm run preview` ve složce `pwa/`.
+Dev server: `http://127.0.0.1:5173`. Záložky: Dnes, Katalog, Mapa, Deník, Nastavení (Info je `/info`). Offline shell ověř `npm run build` a `npm run preview` ve složce `pwa/`.
 
 Příprava složky pro [Netlify Drop](https://app.netlify.com/drop):
 
@@ -139,4 +144,4 @@ Formáty souborů: [JSON_FORMATS.md](JSON_FORMATS.md). Importy a matching: [IMPO
 
 ## Mimo MVP
 
-Automatický Dropbox, REST mezi zařízeními, účty, osobní fotky, číselník osob, výlety, gamifikace, offline mapové dlaždice, editace master dat v PWA.
+Automatický Dropbox API, veřejné REST / cloud sync, účty, číselník osob, offline mapové dlaždice, editace master dat v PWA.

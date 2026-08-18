@@ -16,6 +16,7 @@ from app.db.enums import label
 from app.db.models import ImportFieldChange, ImportReview, ImportRun, Place
 from app.deps import db_session
 from app.importers.fixture import DEFAULT_FIXTURE, FIXTURE_DIR, list_fixture_files
+from app.importers.official_web.parser import parse_public_ids
 from app.services.apply_import import (
     ImportResult,
     RecordOutcome,
@@ -100,6 +101,11 @@ def _open_change_count(session: Session) -> int:
 def _use_cache(form) -> bool:
     value = str(form.get("use_cache") or "").strip().lower()
     return value in {"1", "on", "true", "yes"}
+
+
+def _public_ids_from_form(form) -> list[str] | None:
+    ids = parse_public_ids(str(form.get("public_ids") or ""))
+    return ids or None
 
 
 def _result_from_preview_payload(payload: dict) -> ImportResult:
@@ -216,7 +222,7 @@ async def wikidata_apply(request: Request, background_tasks: BackgroundTasks):
     form = await request.form()
     if not try_begin_job(source_type="wikidata", message="Spouštím import Wikidata…"):
         return RedirectResponse("/import?notice=already_running", status_code=HTTP_303_SEE_OTHER)
-    background_tasks.add_task(run_named_apply, "wikidata", use_cache=_use_cache(form))
+    background_tasks.add_task(run_named_apply, "wikidata", use_cache=_use_cache(form), public_ids=None)
     return RedirectResponse("/import?notice=import_running", status_code=HTTP_303_SEE_OTHER)
 
 
@@ -224,7 +230,10 @@ async def _apply_named(request: Request, background_tasks: BackgroundTasks, sour
     form = await request.form()
     if not try_begin_job(source_type=source_type, message=message):
         return RedirectResponse("/import?notice=already_running", status_code=HTTP_303_SEE_OTHER)
-    background_tasks.add_task(run_named_apply, source_type, use_cache=_use_cache(form))
+    public_ids = _public_ids_from_form(form) if source_type == "official_web" else None
+    background_tasks.add_task(
+        run_named_apply, source_type, use_cache=_use_cache(form), public_ids=public_ids
+    )
     return RedirectResponse("/import?notice=import_running", status_code=HTTP_303_SEE_OTHER)
 
 
@@ -232,7 +241,10 @@ async def _preview_named(request: Request, background_tasks: BackgroundTasks, so
     form = await request.form()
     if not try_begin_job(source_type=source_type, message=message, kind="preview"):
         return RedirectResponse("/import?notice=already_running", status_code=HTTP_303_SEE_OTHER)
-    background_tasks.add_task(run_named_preview, source_type, use_cache=_use_cache(form))
+    public_ids = _public_ids_from_form(form) if source_type == "official_web" else None
+    background_tasks.add_task(
+        run_named_preview, source_type, use_cache=_use_cache(form), public_ids=public_ids
+    )
     return RedirectResponse("/import?notice=preview_running", status_code=HTTP_303_SEE_OTHER)
 
 

@@ -111,7 +111,9 @@ Priorita zdrojů při automatickém zápisu pole bez override:
 | official_website | npu > wikidata > osm |
 | wikipedia_url | wikipedia / wikidata |
 | image | wikimedia_commons přes wikidata P18 |
-| opening_hours_url, ticket_url | npu > official_web > osm |
+| opening_hours_url | npu > official_web > osm |
+| ticket_url | npu > official_web |
+| osm_opening_hours | osm |
 | visitability | npu > osm > official_web > wikidata |
 
 Ruční master má vždy přednost. Zříceniny (`typ RUIN` nebo `condition=RUIN`) bez ručního override dostanou `FREE_ACCESS` — otevírací doba se u nich nehledá.
@@ -128,7 +130,9 @@ Všechny síťové importery posílají povinný `User-Agent`. Stažená odpově
 
 ### Wikidata
 
-První páteř katalogu. SPARQL z `query.wikidata.org` po typech (hrad, zámek, zřícenina, tvrz, rozhledna, zoo, jeskyně). Tvrz je Wikidata `Q1408475`, rozhledna `Q1440300`, zoo `Q43501`, jeskyně `Q35509`. Licence CC0. QID se ukládá jako `place_sources(wikidata, Q…)`.
+První páteř katalogu. SPARQL z `query.wikidata.org` po typech (hrad, zámek, zřícenina, tvrz, palác, rozhledna, zoo, jeskyně). Tvrz je Wikidata `Q1408475`, palác `Q16560`, rozhledna `Q1440300`, zoo `Q43501`, jeskyně `Q35509`. U míst, která už mají QID ale typový SPARQL je minul (typicky palác natažený přes OSM), se P18 doplní samostatným dotazem. Licence CC0. QID se ukládá jako `place_sources(wikidata, Q…)`.
+
+Po typech se dávkově doplní stav objektu (P5816 / P576) a volitelně rok vzniku (P571) se slohem (P149).
 
 Obec / okres / kraj se berou z hierarchického `P131+` (ne jen z přímé části obce). Adresa se složí z čísla popisného `P4856` a přímého `P131` (např. Dolní Adršpach 75). Text Wikipedie se neparsuje.
 
@@ -154,11 +158,13 @@ Jen URL a kontrola úplnosti kategorií. Texty článků se nekopírují.
 
 ### OpenStreetMap
 
-Volitelný doplněk, ne master katalog. Matching přes tag `wikidata` nebo A/B/C. Licence ODbL. Přístupnost se bere z `opening_hours` (včetně sezónních měsíců), `tourism=attraction|museum`, `fee`, `access` a `ruins=yes` (volný přístup, pokud není `access=private`).
+Volitelný doplněk, ne master katalog. Matching přes tag `wikidata` nebo A/B/C. Licence ODbL. Přístupnost se bere z `opening_hours` (včetně sezónních měsíců), `tourism=attraction|museum`, `fee`, `access` a `ruins=yes` (volný přístup, pokud není `access=private`). Samotný řetězec `opening_hours` se ukládá do `osm_opening_hours` a jde do `catalog.json` — PWA z něj pozná „dnes otevřeno / sezóna“. Volitelně i `dogs`, `payment` a zázemí (`toilets` na místě; kavárna / restaurace / hřiště do 350 m).
 
 ### Oficiální weby
 
-Jen místa s `visitability=UNKNOWN` a vyplněným `official_website`. Zříceniny se přeskakují. Stáhne se homepage, hledají se návštěvní signály (prohlídky, vstupenky, otevírací doba). HTML ani autorský text se neukládá. Hrady.cz a CzechTourism se nescrapují.
+Bez zadaných `public_id` všechna místa s `official_website`, kde je `visitability=UNKNOWN` nebo chybí `opening_hours_url` / `ticket_url`. S ID i místa, která už odkazy mají (obnova). Zříceniny a ruční override přístupnosti se přeskakují. Stáhne se homepage, z JSON-LD a odkazů se berou návštěvní signály a URL otevírací doby / vstupného. HTML ani autorský text se neukládá. Chybějící konvenční NPÚ cesty `/navstevni-doba` a `/vstupne` se ověří HTTP 2xx; 404 se nezapíše. Hrady.cz a CzechTourism se nescrapují.
+
+Na detailu místa v PC je tlačítko **Doplnit z oficiálního webu** (náhled/apply stejného importeru pro jedno ID).
 
 Hrady.cz a CzechTourism se nescrapují a nemají API importer.
 

@@ -1,0 +1,33 @@
+<section class="lan-panel" id="exchange-panel">
+  <h3>Složka pro telefon</h3>
+  <p class="muted">Jednou nastavte Dropbox nebo USB. Telefon sem uloží <code>diary.zip</code>, PC po sloučení zapíše <code>diary-z-pc.zip</code>. Živou databázi sem nedávejte.</p>
+  <form method="post" action="/exchange/folder">
+    <label>Cesta ke složce
+      <input type="text" name="folder" value="{{ exchange.folder or '' }}" placeholder="C:\Users\…\Dropbox\Pamatky" autocomplete="off">
+    </label>
+    <button type="submit" class="secondary">Uložit cestu</button>
+  </form>
+  {% if exchange.folder %}
+  <p class="muted">
+    {% if exchange.folder_exists %}
+      Složka: <code>{{ exchange.folder }}</code>
+      {% if exchange.incoming %} · čeká {{ exchange.incoming.name }}{% else %} · diary.zip z telefonu tu zatím není{% endif %}
+      {% if exchange.outgoing_diary %} · {{ exchange.outgoing_diary.name }} k importu v PWA{% endif %}
+      {% if exchange.outgoing_catalog %} · catalog.json je ve složce{% endif %}
+    {% else %}
+      Cesta je uložená, ale složka <code>{{ exchange.folder }}</code> teď neexistuje.
+    {% endif %}
+  </p>
+  <div class="actions-row">
+    <form method="post" action="/exchange/import-diary">
+      <button type="submit"{% if not exchange.incoming %} disabled{% endif %}>Sloučit deník ze složky</button>
+    </form>
+    <form method="post" action="/exchange/catalog">
+      <button type="submit" class="secondary"{% if not exchange.folder_exists %} disabled{% endif %}>Dát catalog.json do složky</button>
+    </form>
+    <form method="post" action="/exchange/open-folder">
+      <button type="submit" class="secondary"{% if not exchange.folder_exists %} disabled{% endif %}>Otevřít složku</button>
+    </form>
+  </div>
+  {% endif %}
+</section>

@@ -10,7 +10,7 @@
 {% endif %}
 
 <div class="toolbar">
-  <h1>{{ place.name }}</h1>
+  <h1 class="place-title">{{ place_stamp_svg(place, size=48) }} {{ place.name | display_place_name }}</h1>
   <div class="actions-row">
     <a href="/places/{{ place.public_id }}/edit" role="button">Upravit</a>
     <a href="/places/{{ place.public_id }}/overrides" role="button" class="secondary">Katalog vs zdroj</a>
@@ -22,6 +22,12 @@
       {% endif %}
     {% else %}
     <a href="/places/{{ place.public_id }}/merge" role="button" class="secondary">Sloučit s jiným</a>
+    {% if official_web_enrichable %}
+    <form method="post" action="/import/official_web/preview">
+      <input type="hidden" name="public_ids" value="{{ place.public_id }}">
+      <button type="submit" class="secondary" {% if import_busy %}disabled{% endif %}>Doplnit z oficiálního webu</button>
+    </form>
+    {% endif %}
     <form method="post" action="/places/{{ place.public_id }}/archive"
           onsubmit="return confirm('Archivovat toto místo? Záznam zůstane v databázi včetně interního ID.');">
       <button type="submit" class="secondary">Archivovat</button>
@@ -42,6 +48,22 @@
 
 {% if place.short_description %}
 <p>{{ place.short_description }}</p>
+{% endif %}
+
+{% set catalog_photo = place.primary_photo %}
+{% set catalog_photo_url = photo_display_url(catalog_photo) %}
+{% if catalog_photo_url %}
+<figure class="place-photo">
+  <img src="{{ catalog_photo_url }}" alt="{{ place.name }}">
+  {% if catalog_photo.attribution or catalog_photo.license %}
+  <figcaption>
+    {{ catalog_photo.attribution or "" }}{% if catalog_photo.attribution and catalog_photo.license %} · {% endif %}{% if catalog_photo.license %}{{ catalog_photo.license }}{% endif %}
+    {% if catalog_photo.license_url and is_http_url(catalog_photo.license_url) %}
+    · <a href="{{ catalog_photo.license_url }}" target="_blank" rel="noopener">licence</a>
+    {% endif %}
+  </figcaption>
+  {% endif %}
+</figure>
 {% endif %}
 
 <h2>Zařazení</h2>
@@ -92,6 +114,30 @@
   <dd>{% if place.wikipedia_url %}<a href="{{ place.wikipedia_url }}" target="_blank" rel="noopener">{{ place.wikipedia_url }}</a>{% else %}—{% endif %}</dd>
   <dt>Otevírací doba</dt>
   <dd>{% if place.opening_hours_url %}<a href="{{ place.opening_hours_url }}" target="_blank" rel="noopener">{{ place.opening_hours_url }}</a>{% else %}—{% endif %}</dd>
+  <dt>OSM hodiny</dt>
+  <dd>{% if place.osm_opening_hours %}{{ place.osm_opening_hours }}{% else %}—{% endif %}</dd>
+  <dt>Poslední vstup</dt>
+  <dd>{{ place.last_entry or "—" }}</dd>
+  <dt>Délka prohlídky</dt>
+  <dd>{% if place.visit_duration_minutes %}{{ place.visit_duration_minutes }} min{% else %}—{% endif %}</dd>
+  <dt>Telefon</dt>
+  <dd>{% if place.phone %}<a href="tel:{{ place.phone }}">{{ place.phone }}</a>{% else %}—{% endif %}</dd>
+  <dt>Vstupné</dt>
+  <dd>{{ place.fee or "—" }}</dd>
+  <dt>Bezbariérovost</dt>
+  <dd>{{ place.wheelchair or "—" }}</dd>
+  <dt>Parkování</dt>
+  <dd>{{ place.parking or "—" }}</dd>
+  <dt>Psi</dt>
+  <dd>{{ place.dogs or "—" }}</dd>
+  <dt>Platba</dt>
+  <dd>{{ place.payment or "—" }}</dd>
+  <dt>Zázemí</dt>
+  <dd>{% if place.amenity_codes %}{{ place.amenity_codes | join(", ") }}{% else %}—{% endif %}</dd>
+  <dt>Sloh</dt>
+  <dd>{{ place.architectural_style or "—" }}</dd>
+  <dt>Rok vzniku</dt>
+  <dd>{{ place.inception_year or "—" }}</dd>
   <dt>Vstupenky</dt>
   <dd>{% if place.ticket_url %}<a href="{{ place.ticket_url }}" target="_blank" rel="noopener">{{ place.ticket_url }}</a>{% else %}—{% endif %}</dd>
 </dl>
@@ -151,6 +197,7 @@
           <th>Hodnocení</th>
           <th>Kdo tam byl</th>
           <th>Poznámka</th>
+          <th>Fotky</th>
           <th></th>
         </tr>
       </thead>
@@ -161,6 +208,13 @@
           <td>{% if visit.rating %}{{ visit.rating }} / 5{% else %}—{% endif %}</td>
           <td>{{ visit.people | join(", ") if visit.people else "—" }}</td>
           <td>{{ visit.note or "—" }}</td>
+          <td>
+            {% for name in (visit_photos or {}).get(visit.public_id, []) %}
+            <a href="/visit-photos/{{ visit.public_id }}/{{ name }}" target="_blank" rel="noopener">
+              <img src="/visit-photos/{{ visit.public_id }}/{{ name }}" alt="" class="visit-thumb">
+            </a>
+            {% endfor %}
+          </td>
           <td class="actions-row">
             <a href="/places/{{ place.public_id }}?edit={{ visit.public_id }}#denik">Upravit</a>
             <form method="post" action="/places/{{ place.public_id }}/visits/{{ visit.public_id }}/delete"

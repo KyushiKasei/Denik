@@ -11,6 +11,7 @@ from app.importers.wikipedia.parser import CATEGORIES
 from app.logging_setup import get_logger
 
 API = "https://cs.wikipedia.org/w/api.php"
+MAX_CATEGORY_CONTINUES = 40
 _log = get_logger()
 
 
@@ -35,7 +36,7 @@ class WikipediaClient:
     def fetch_category(self, category: str) -> dict[str, Any]:
         members: list[dict[str, Any]] = []
         cont: str | None = None
-        while True:
+        for _ in range(MAX_CATEGORY_CONTINUES):
             params = {
                 "action": "query",
                 "format": "json",
@@ -53,6 +54,8 @@ class WikipediaClient:
             cont = ((payload.get("continue") or {}).get("cmcontinue")) if isinstance(payload, dict) else None
             if not cont:
                 break
+        else:
+            _log.warning("wikipedia category=%s continue cap=%s", category, MAX_CATEGORY_CONTINUES)
         titles = [str(item.get("title")) for item in members if item.get("title")]
         by_title = {title: {"title": title} for title in titles}
         for offset in range(0, len(titles), 50):

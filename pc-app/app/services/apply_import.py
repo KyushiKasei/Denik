@@ -27,10 +27,7 @@ from app.logging_setup import get_logger
 from app.services.backup import backup_before_import
 from app.services.import_progress import data_dir_for_session, write_progress
 from app.services.matching import (
-    LEVEL_A,
     LEVEL_B,
-    LEVEL_C,
-    LEVEL_D,
     LEVEL_FAILED,
     LEVEL_IGNORED,
     MatchDecision,
@@ -41,7 +38,6 @@ from app.services.overrides import (
     apply_value_to_place,
     has_override,
     master_value,
-    snapshot_place,
 )
 from app.services.source_urls import identity_source_url
 from app.services.values import decode_value, encode_value, values_equal
@@ -69,6 +65,18 @@ SOURCE_VALUE_FIELDS = (
     "region_code",
     "opening_hours_url",
     "ticket_url",
+    "osm_opening_hours",
+    "phone",
+    "fee",
+    "wheelchair",
+    "parking",
+    "visit_duration_minutes",
+    "last_entry",
+    "dogs",
+    "payment",
+    "amenities",
+    "inception_year",
+    "architectural_style",
     "unesco",
 )
 
@@ -89,8 +97,21 @@ FIELD_SOURCE_PRIORITY: dict[str, list[str]] = {
     "short_description": ["wikidata", "pamatkovy_katalog"],
     "address": ["pamatkovy_katalog", "wikidata", "osm", "ruian"],
     "opening_hours_url": ["npu", "official_web", "osm"],
-    "ticket_url": ["npu"],
+    "ticket_url": ["npu", "official_web"],
+    "osm_opening_hours": ["osm"],
+    "phone": ["osm"],
+    "fee": ["osm"],
+    "wheelchair": ["osm"],
+    "parking": ["osm"],
+    "visit_duration_minutes": ["osm"],
+    "last_entry": ["osm"],
+    "dogs": ["osm"],
+    "payment": ["osm"],
+    "amenities": ["osm"],
+    "inception_year": ["wikidata"],
+    "architectural_style": ["wikidata"],
     "visitability": ["npu", "osm", "official_web", "wikidata"],
+    "condition": ["wikidata", "osm"],
 }
 
 
@@ -138,6 +159,8 @@ def record_field_value(record: CanonicalRecord, field_name: str) -> Any:
         return list(record.types)
     if field_name == "alternative_names":
         return list(record.alternative_names)
+    if field_name == "amenities":
+        return list(record.amenities)
     if field_name == "unesco":
         if record.unesco is None:
             return None
@@ -440,11 +463,26 @@ def _incoming_master_fields(record: CanonicalRecord) -> dict[str, Any]:
         "region_code",
         "opening_hours_url",
         "ticket_url",
+        "osm_opening_hours",
+        "phone",
+        "fee",
+        "wheelchair",
+        "parking",
+        "visit_duration_minutes",
+        "last_entry",
+        "dogs",
+        "payment",
+        "amenities",
+        "inception_year",
+        "architectural_style",
         "unesco",
     ):
         value = record_field_value(record, field_name)
-        if value is not None and value != "":
-            data[field_name] = value
+        if value is None or value == "":
+            continue
+        if field_name == "amenities" and not value:
+            continue
+        data[field_name] = value
     return data
 
 
@@ -526,8 +564,9 @@ def _apply_master_from_record(
         if creating:
             if field_name == "types":
                 place.types = _types_for_codes(session, list(incoming))
-            elif field_name == "alternative_names":
-                place.alternative_names = encode_value(list(incoming))
+            elif field_name in {"alternative_names", "amenities"}:
+                place_field = "alternative_names" if field_name == "alternative_names" else "amenities"
+                setattr(place, place_field, encode_value(list(incoming)))
             else:
                 apply_value_to_place(place, field_name, incoming, session)
             changed = True

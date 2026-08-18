@@ -16,11 +16,33 @@ async function metaValue<T>(key: string): Promise<T | undefined> {
   return row?.value as T | undefined;
 }
 
+let placesCache: CatalogPlace[] | null = null;
+
+export function peekPlaces(): CatalogPlace[] | null {
+  return placesCache;
+}
+
+export function invalidatePlacesCache(): void {
+  placesCache = null;
+}
+
 export async function loadPlaces(): Promise<CatalogPlace[]> {
-  return db.places.toArray();
+  if (placesCache) {
+    return placesCache;
+  }
+  const rows = await db.places.toArray();
+  // Import mezitím mohl naplnit cache — starý toArray ji nesmí přepsat.
+  if (placesCache) {
+    return placesCache;
+  }
+  placesCache = rows;
+  return placesCache;
 }
 
 export async function getPlace(id: string): Promise<CatalogPlace | undefined> {
+  if (placesCache) {
+    return placesCache.find((place) => place.id === id);
+  }
   return db.places.get(id);
 }
 
@@ -84,6 +106,8 @@ export async function replacePlacesStore(catalog: Catalog): Promise<CatalogDiff>
     await db.meta.put({ key: "attribution", value: catalog.attribution });
     await db.meta.put({ key: "imported_at", value: importedAt });
   });
+  // Až po commitu — jinak rollback Dexie nechá UI u nového katalogu.
+  placesCache = catalog.places;
 
   await persistStorage();
   return diff;

@@ -1,6 +1,7 @@
 import "fake-indexeddb/auto";
 import { afterEach, beforeEach } from "vitest";
 import { db } from "../src/db";
+import { invalidatePlacesCache } from "../src/catalog/importCatalog";
 import { clearExportReminderDismiss } from "../src/diary/reminder";
 
 if (typeof globalThis.localStorage === "undefined") {
@@ -26,6 +27,7 @@ if (typeof globalThis.localStorage === "undefined") {
 beforeEach(async () => {
   localStorage.clear();
   clearExportReminderDismiss();
+  invalidatePlacesCache();
   if (db.isOpen()) {
     db.close();
   }

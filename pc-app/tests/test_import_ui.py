@@ -52,6 +52,7 @@ def test_import_buttons_disabled_when_job_running(client) -> None:
             "/import/wikimedia_commons/apply",
             "/import/wikipedia/apply",
             "/import/osm/apply",
+            "/import/official_web/apply",
         ):
             assert f'formaction="{action}"' in page.text
             snippet = page.text.split(f'formaction="{action}"', 1)[1][:80]
@@ -249,7 +250,7 @@ def test_wikidata_preview_and_apply_via_ui(client, monkeypatch) -> None:
 
     monkeypatch.setattr(
         "app.services.import_job.fetch_wikidata_records",
-        lambda use_cache=False: records,
+        lambda use_cache=False, session=None: records,
     )
 
     preview = client.post("/import/wikidata/preview", follow_redirects=True)
@@ -395,4 +396,16 @@ def test_pc_ui_vendor_assets_are_local(client) -> None:
     assert "/static/vendor/leaflet/leaflet.css" in nearby.text
     assert client.get("/static/vendor/leaflet/leaflet.js").status_code == 200
     assert client.get("/static/vendor/leaflet/images/marker-icon.png").status_code == 200
+
+
+def test_theme_toggle_in_base_layout(client) -> None:
+    home = client.get("/")
+    assert home.status_code == 200
+    assert 'localStorage.getItem("pamatky-theme")' in home.text
+    assert 'id="theme-preference"' in home.text
+    assert "Systém" in home.text
+    assert "Světlý" in home.text
+    assert "Tmavý" in home.text
+    assert 'data-theme' in home.text
+
 

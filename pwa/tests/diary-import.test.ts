@@ -7,7 +7,9 @@ import { replacePlacesStore } from "../src/catalog/importCatalog";
 import type { StoredVisit } from "../src/catalog/types";
 import { loadCatalogFromText } from "../src/catalog/validate";
 import { db } from "../src/db";
-import { addVisit, importDiary, loadVisits, loadVisitsForPlace, updateVisit } from "../src/diary/store";
+import { addVisit, importDiary, importDiaryPhotos, loadVisits, loadVisitsForPlace, updateVisit } from "../src/diary/store";
+import { incomingIsNewer } from "../src/diary/merge";
+import { MAX_PHOTOS_PER_VISIT, photoZipPath } from "../src/diary/photos";
 import { loadDiaryFromText } from "../src/diary/validate";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -195,4 +197,41 @@ test("smazaný výlet se znovu nevloží ze staršího souboru", async () => {
   expect(older.tripsUpdated).toBe(0);
   const row = await db.trips.get(tripId);
   expect(row?.deleted_at).toBe("2026-08-17T10:00:00+02:00");
+});
+
+test("import fotek z ZIP zachová webp MIME", async () => {
+  const visitId = sampleDiary.visits[0].id;
+  const photoId = "0198f23a-5e5e-7b31-a8be-8c99507a2161";
+  const imported = await importDiaryPhotos([
+    { name: `photos/${visitId}/${photoId}.webp`, data: new Uint8Array([1, 2, 3]) },
+  ]);
+  expect(imported).toBe(1);
+  const row = await db.visit_photos.get(photoId);
+  expect(row?.mime).toBe("image/webp");
+  expect(photoZipPath(row!)).toBe(`photos/${visitId}/${photoId}.webp`);
+});
+
+test("import fotek z ZIP přeskočí čtvrtou a příliš velkou", async () => {
+  const visitId = sampleDiary.visits[0].id;
+  const ids = [
+    "0198f23a-5e5e-7b31-a8be-8c99507a2141",
+    "0198f23a-5e5e-7b31-a8be-8c99507a2142",
+    "0198f23a-5e5e-7b31-a8be-8c99507a2143",
+    "0198f23a-5e5e-7b31-a8be-8c99507a2144",
+  ];
+  const imported = await importDiaryPhotos([
+    ...ids.map((id) => ({ name: `photos/${visitId}/${id}.jpg`, data: new Uint8Array([1, 2, 3]) })),
+    {
+      name: "photos/0198f23a-5e5e-7b31-a8be-8c99507a2150/0198f23a-5e5e-7b31-a8be-8c99507a2151.jpg",
+      data: new Uint8Array(8 * 1024 * 1024 + 1),
+    },
+  ]);
+  expect(imported).toBe(MAX_PHOTOS_PER_VISIT);
+  expect(await db.visit_photos.count()).toBe(MAX_PHOTOS_PER_VISIT);
+});
+
+test("incomingIsNewer ořízne mezery jako Python", () => {
+  const { apply, tied } = incomingIsNewer(" 2026-08-18T12:00:00+02:00 ", "2026-08-18T12:00:00+02:00");
+  expect(apply).toBe(true);
+  expect(tied).toBe(true);
 });

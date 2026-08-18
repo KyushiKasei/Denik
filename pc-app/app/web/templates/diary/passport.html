@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Deník — Památky{% endblock %}
+{% block content %}
+<div class="toolbar">
+  <h1>Deník</h1>
+  <div class="actions-row">
+    <a href="/visits" role="button" class="secondary">Návštěvy</a>
+    <a href="/yearbook" role="button" class="secondary">Ročenka</a>
+    <a href="/nearby?view=atlas" role="button" class="secondary">Atlas</a>
+  </div>
+</div>
+<p class="muted">Po importu diary.json (nebo zipu s fotkami) se tu objeví stejný pas a otisky jako v telefonu.</p>
+
+{% if badges %}
+<ul class="diary-badge-list" aria-label="Odznaky">
+  {% for badge in badges %}
+  <li class="diary-badge{% if not badge.unlocked %} is-locked{% endif %}">
+    <strong>{{ badge.title }}</strong>
+    <span class="muted">{{ badge.detail }}</span>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+<section class="regions-map" id="kraje" aria-label="Kraje Česka">
+  <header class="regions-map-header">
+    <h2>Kraje</h2>
+    <p class="muted">{{ unlocked_regions }} z {{ progress | length }} krajů s návštěvou</p>
+  </header>
+  <svg viewBox="0 0 1000 580" class="regions-svg" role="group" aria-label="Schematická mapa krajů">
+    {% for row in progress %}
+    <a href="/diary?region={{ row.region.id }}">
+      <path d="{{ row.region.path }}"
+            class="region-path{% if row.unlocked %} is-unlocked{% endif %}{% if row.visited > 1 %} is-rich{% endif %}">
+        <title>{{ row.region.name }}: {{ row.visited }}{% if row.total %} / {{ row.total }}{% endif %}</title>
+      </path>
+    </a>
+    {% endfor %}
+  </svg>
+  <ul class="region-legend">
+    {% for row in progress if row.unlocked %}
+    <li>
+      <a href="/diary?region={{ row.region.id }}">{{ row.region.short }}</a>
+      <span class="muted"> {{ row.visited }}{% if row.total %}/{{ row.total }}{% endif %}</span>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+
+{% if selected %}
+<section class="passport-album">
+  <div class="passport-tabs" role="tablist" aria-label="Stránky krajů">
+    {% for page in pages %}
+    <a href="/diary?region={{ page.region.id }}"
+       role="tab"
+       aria-selected="{{ 'true' if page.region.id == selected.region.id else 'false' }}"
+       class="passport-tab{% if page.region.id == selected.region.id %} is-active{% endif %}">
+      {{ page.region.short }}{% if page.stamps %} {{ page.stamps | length }}{% endif %}
+    </a>
+    {% endfor %}
+  </div>
+  <header class="passport-page-header">
+    <h2>{{ selected.region.name }}</h2>
+    <p class="muted">
+      {{ selected.stamps | length }}{% if selected.total %} / {{ selected.total }}{% endif %} míst
+    </p>
+  </header>
+  <ul class="passport-grid">
+    {% for stamp in selected.stamps %}
+    <li>
+      <a href="/places/{{ stamp.place_id }}#denik" class="passport-stamp">
+        {{ stamp_svg(stamp.kind, stamp.wax, size=72) }}
+        <span class="passport-stamp-name">{{ stamp.name }}</span>
+        <span class="muted small">{{ format_visit_date(stamp.visited_at) }}</span>
+      </a>
+    </li>
+    {% endfor %}
+    {% for _ in range(selected.empty_slots) %}
+    <li class="passport-stamp is-empty" aria-hidden="true">
+      {{ stamp_svg("other", "#9a9084", size=72, empty=true) }}
+    </li>
+    {% endfor %}
+  </ul>
+  {% if not selected.stamps %}
+  <p class="muted">V tomto kraji zatím žádný otisk.</p>
+  {% endif %}
+  <p class="muted small">
+    <a href="/nearby?view=atlas&region={{ selected.region.name | urlencode }}">Atlas tohoto kraje</a>
+    ·
+    <a href="/yearbook">Ročenka k tisku</a>
+    ·
+    <a href="/visits">Chronologický seznam návštěv</a>
+  </p>
+</section>
+{% else %}
+<p class="muted">Pas se vyplní po prvním razítku. Importujte deník z telefonu, nebo zapište návštěvu u místa v katalogu.</p>
+{% endif %}
+{% endblock %}

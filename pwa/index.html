@@ -8,6 +8,21 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Památky" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("pamatky-theme");
+          var dark =
+            t === "dark" ||
+            (t !== "light" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute("content", dark ? "#1a1814" : "#3d5a40");
+          var bar = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+          if (bar) bar.setAttribute("content", dark ? "black-translucent" : "default");
+        } catch (e) {}
+      })();
+    </script>
     <meta
       name="description"
       content="Osobní katalog hradů, zámků a historických míst. Funguje i bez sítě po nahrání catalog.json."

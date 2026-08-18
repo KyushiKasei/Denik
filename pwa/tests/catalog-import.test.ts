@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { diffPlaces } from "../src/catalog/diff";
-import { catalogVersionAlreadyLoaded, previewCatalogImport, replacePlacesStore } from "../src/catalog/importCatalog";
+import { catalogVersionAlreadyLoaded, previewCatalogImport, replacePlacesStore, loadPlaces, invalidatePlacesCache } from "../src/catalog/importCatalog";
 import type { Catalog, CatalogPlace, StoredVisit } from "../src/catalog/types";
 import { loadCatalogFromText } from "../src/catalog/validate";
 import { db } from "../src/db";
@@ -100,4 +100,37 @@ test("stejná catalog_version už je nahraná", () => {
   expect(catalogVersionAlreadyLoaded(null, 17)).toBe(false);
   expect(catalogVersionAlreadyLoaded(17, 17)).toBe(true);
   expect(catalogVersionAlreadyLoaded(17, 18)).toBe(false);
+});
+
+test("loadPlaces po importu nenechá cache na starém toArray", async () => {
+  await replacePlacesStore(sample);
+  invalidatePlacesCache();
+  const extra: CatalogPlace = {
+    ...sample.places[0],
+    id: "0198f23a-5e5e-7b31-a8be-8c99507a2142",
+    name: "Karlštejn",
+  };
+  const newer = withPlaces([extra], 21);
+  const originalToArray = db.places.toArray.bind(db.places) as () => Promise<CatalogPlace[]>;
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let delayNext = true;
+  (db.places as { toArray: () => Promise<CatalogPlace[]> }).toArray = async () => {
+    if (delayNext) {
+      delayNext = false;
+      await gate;
+    }
+    return originalToArray();
+  };
+  try {
+    const pending = loadPlaces();
+    await replacePlacesStore(newer);
+    release();
+    await pending;
+    expect((await loadPlaces())[0]?.name).toBe("Karlštejn");
+  } finally {
+    (db.places as { toArray: () => Promise<CatalogPlace[]> }).toArray = originalToArray;
+  }
 });

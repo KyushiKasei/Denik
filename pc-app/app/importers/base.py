@@ -36,7 +36,19 @@ class CanonicalRecord:
     region_code: str | None = None
     opening_hours_url: str | None = None
     ticket_url: str | None = None
+    osm_opening_hours: str | None = None
     unesco: int | None = None
+    phone: str | None = None
+    fee: str | None = None
+    wheelchair: str | None = None
+    parking: str | None = None
+    visit_duration_minutes: int | None = None
+    last_entry: str | None = None
+    dogs: str | None = None
+    payment: str | None = None
+    amenities: list[str] = field(default_factory=list)
+    inception_year: int | None = None
+    architectural_style: str | None = None
     allow_create: bool = True
 
     def all_external_ids(self) -> list[tuple[str, str]]:
@@ -78,5 +90,17 @@ class CanonicalRecord:
         payload["image"] = image if isinstance(image, dict) else None
         if payload.get("unesco") is not None:
             payload["unesco"] = 1 if payload["unesco"] in (1, True, "1", "true") else 0
+        if payload.get("visit_duration_minutes") is not None:
+            try:
+                payload["visit_duration_minutes"] = int(payload["visit_duration_minutes"])
+            except (TypeError, ValueError):
+                payload["visit_duration_minutes"] = None
+        amenities = payload.get("amenities") or []
+        payload["amenities"] = [str(item) for item in amenities if item]
+        if payload.get("inception_year") is not None:
+            try:
+                payload["inception_year"] = int(payload["inception_year"])
+            except (TypeError, ValueError):
+                payload["inception_year"] = None
         payload["allow_create"] = bool(payload.get("allow_create", True))
         return cls(**payload)

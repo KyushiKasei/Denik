@@ -37,6 +37,7 @@
         "opening_hours": null,
         "tickets": null
       },
+      "osm_opening_hours": "Mo-Su 09:00-16:00",
       "image": {
         "thumbnail_url": "https://commons.wikimedia.org/wiki/Special:FilePath/Hrad_Bouzov.jpg?width=640",
         "original_url": "https://commons.wikimedia.org/wiki/File:Hrad_Bouzov.jpg",

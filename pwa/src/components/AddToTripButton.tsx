@@ -12,6 +12,9 @@ export function AddToTripButton({
   const [status, setStatus] = useState<"idle" | "saving" | "done" | "error">("idle");
 
   const onClick = async () => {
+    if (status === "saving") {
+      return;
+    }
     setStatus("saving");
     try {
       await addPlaceToActiveTrip(placeId, origin ?? null);
@@ -23,7 +26,7 @@ export function AddToTripButton({
 
   return (
     <button type="button" className="ghost" onClick={() => void onClick()} disabled={status === "saving"}>
-      {status === "done" ? "Na výletu" : status === "error" ? "Nepodařilo se" : "Na výlet"}
+      {status === "done" ? "Zaplánováno" : status === "error" ? "Nepodařilo se" : "Na výlet"}
     </button>
   );
 }

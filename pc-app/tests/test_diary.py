@@ -145,6 +145,16 @@ def test_invalid_diary_is_rejected(tmp_path: Path) -> None:
         validate_diary(["not", "an", "object"])
 
 
+def test_load_and_validate_diary_rejects_huge_file(tmp_path: Path, monkeypatch) -> None:
+    from app.services import diary_schema
+
+    monkeypatch.setattr(diary_schema, "MAX_DIARY_JSON_BYTES", 10)
+    huge = tmp_path / "huge.json"
+    huge.write_text('{"visits":[]}', encoding="utf-8")
+    with pytest.raises(DiarySchemaError, match="moc velký"):
+        load_and_validate_diary(huge)
+
+
 def test_repeated_import_creates_zero_duplicates(session: Session) -> None:
     _seed_bouzov(session)
     data = _diary()
@@ -170,6 +180,144 @@ def test_two_visits_same_place_remain_two(session: Session) -> None:
     assert len(rows) == 2
     assert {row.public_id for row in rows} == {VISIT_A, VISIT_B}
     assert {row.place_public_id for row in rows} == {BOUZOV_ID}
+
+
+def test_family_import_collapses_same_place_and_day(session: Session) -> None:
+    _seed_bouzov(session)
+    import_diary(session, _diary(), make_backup=False)
+    incoming = _diary(
+        visits=[
+            _visit(
+                id=VISIT_B,
+                visited_at="2026-08-09",
+                people=["Eva"],
+                note="Rodinná poznámka.",
+                rating=4,
+                created_at="2026-08-09T19:00:00+02:00",
+                updated_at="2026-08-09T19:00:00+02:00",
+            )
+        ],
+        states=[_state(want_to_visit=False, favorite=True, personal_note="Chci znovu.")],
+    )
+    result = import_diary(session, incoming, make_backup=False, family=True)
+    assert result.family_collapsed == 1
+    live = list(session.scalars(select(Visit).where(Visit.deleted_at.is_(None))).all())
+    assert len(live) == 1
+    winner = live[0]
+    assert set(winner.people) >= {"Jana", "Petr", "Eva"}
+    assert winner.note is not None
+    assert "Rodinná poznámka" in winner.note
+    assert winner.rating == 5
+    state = session.scalar(select(PlaceJournalState))
+    assert state is not None
+    assert state.want_to_visit == 1
+    assert state.favorite == 1
+    assert state.personal_note and "Chci znovu" in state.personal_note
+
+
+def test_family_collapse_tie_keeps_smaller_uuid(session: Session) -> None:
+    from app.services.family_merge import collapse_family_visits
+
+    _seed_bouzov(session)
+    stamp = "2026-08-09T10:00:00+02:00"
+    session.add(
+        Visit(
+            public_id=VISIT_B,
+            place_public_id=BOUZOV_ID,
+            visited_at="2026-08-09",
+            people_json="[]",
+            created_at=stamp,
+            updated_at=stamp,
+        )
+    )
+    session.add(
+        Visit(
+            public_id=VISIT_A,
+            place_public_id=BOUZOV_ID,
+            visited_at="2026-08-09",
+            people_json="[]",
+            created_at=stamp,
+            updated_at=stamp,
+        )
+    )
+    assert collapse_family_visits(session) == 1
+    session.commit()
+    live = list(session.scalars(select(Visit).where(Visit.deleted_at.is_(None))).all())
+    assert [row.public_id for row in live] == [VISIT_A]
+
+
+def test_family_collapse_moves_photos_off_loser(
+    session: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PAMATKY_DATA_DIR", str(tmp_path))
+    from app.services.family_merge import collapse_family_visits
+    from app.services.visit_photos import list_visit_photos, save_visit_photo
+
+    _seed_bouzov(session)
+    import_diary(session, _diary(), make_backup=False)
+    import_diary(
+        session,
+        _diary(
+            visits=[
+                _visit(
+                    id=VISIT_B,
+                    visited_at="2026-08-09",
+                    people=["Eva", "Petr", "Jana"],
+                    note="Rodinná poznámka.",
+                    rating=5,
+                    created_at="2026-08-09T19:00:00+02:00",
+                    updated_at="2026-08-09T19:00:00+02:00",
+                )
+            ]
+        ),
+        make_backup=False,
+    )
+    save_visit_photo(VISIT_A, "shot.jpg", b"jpeg-bytes")
+    assert collapse_family_visits(session) == 1
+    session.commit()
+    live = list(session.scalars(select(Visit).where(Visit.deleted_at.is_(None))).all())
+    deleted = list(session.scalars(select(Visit).where(Visit.deleted_at.is_not(None))).all())
+    assert len(live) == 1
+    assert len(deleted) == 1
+    assert [path.name for path in list_visit_photos(live[0].public_id)] == ["shot.jpg"]
+    assert list_visit_photos(deleted[0].public_id) == []
+
+
+def test_family_collapse_caps_moved_photos(
+    session: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PAMATKY_DATA_DIR", str(tmp_path))
+    from app.services.family_merge import collapse_family_visits
+    from app.services.visit_photos import MAX_PHOTOS_PER_VISIT, list_visit_photos, save_visit_photo
+
+    _seed_bouzov(session)
+    import_diary(session, _diary(), make_backup=False)
+    import_diary(
+        session,
+        _diary(
+            visits=[
+                _visit(
+                    id=VISIT_B,
+                    visited_at="2026-08-09",
+                    people=["Eva", "Petr", "Jana"],
+                    note="Rodinná poznámka.",
+                    rating=5,
+                    created_at="2026-08-09T19:00:00+02:00",
+                    updated_at="2026-08-09T19:00:00+02:00",
+                )
+            ]
+        ),
+        make_backup=False,
+    )
+    for index in range(MAX_PHOTOS_PER_VISIT):
+        save_visit_photo(VISIT_B, f"keep{index}.jpg", b"jpeg-bytes")
+    save_visit_photo(VISIT_A, "extra.jpg", b"jpeg-bytes")
+    assert collapse_family_visits(session) == 1
+    session.commit()
+    live = list(session.scalars(select(Visit).where(Visit.deleted_at.is_(None))).all())
+    deleted = list(session.scalars(select(Visit).where(Visit.deleted_at.is_not(None))).all())
+    assert len(list_visit_photos(live[0].public_id)) == MAX_PHOTOS_PER_VISIT
+    assert list_visit_photos(deleted[0].public_id) == []
 
 
 def test_archive_place_does_not_delete_visits(session: Session) -> None:
@@ -205,6 +353,27 @@ def test_unknown_place_id_does_not_create_place(session: Session) -> None:
     issue = session.scalar(select(DiaryImportIssue).where(DiaryImportIssue.place_public_id == UNKNOWN_PLACE))
     assert issue is not None
     assert issue.resolved_at is None
+
+
+def test_incoming_is_newer_compares_naive_and_aware() -> None:
+    from datetime import datetime
+
+    from app.services.diary_io import incoming_is_newer
+
+    naive = "2026-08-18T12:00:00"
+    same_local = datetime.fromisoformat(naive).astimezone().isoformat(timespec="seconds")
+    apply, tied = incoming_is_newer(naive, same_local)
+    assert apply is True
+    assert tied is True
+    incoming_is_newer("2026-08-18T12:00:00+02:00", naive)
+
+
+def test_incoming_is_newer_strips_whitespace() -> None:
+    from app.services.diary_io import incoming_is_newer
+
+    apply, tied = incoming_is_newer(" 2026-08-18T12:00:00+02:00 ", "2026-08-18T12:00:00+02:00")
+    assert apply is True
+    assert tied is True
 
 
 def test_newer_updated_at_wins_and_soft_delete_transfers(session: Session) -> None:
@@ -567,6 +736,7 @@ def test_visit_to_json_never_includes_integer_id(session: Session) -> None:
         "rating",
         "people",
         "note",
+        "trip_id",
         "created_at",
         "updated_at",
         "deleted_at",

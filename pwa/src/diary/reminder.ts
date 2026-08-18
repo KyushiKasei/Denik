@@ -81,14 +81,14 @@ export async function diaryExportReminder(): Promise<ExportReminder> {
   let info: ExportReminder;
   if (!lastExportAt) {
     const oldest = active.reduce((min, visit) => {
-      const ms = Date.parse(visit.created_at);
+      const ms = Date.parse(visit.created_at.trim());
       return Number.isNaN(ms) ? min : Math.min(min, ms);
     }, now);
     const days = Math.floor((now - oldest) / DAY_MS);
     const show = active.length >= EXPORT_REMINDER_NEW_VISITS || days >= EXPORT_REMINDER_DAYS;
     info = { show, daysSinceExport: days, newVisits: active.length, neverExported: true, lastExportAt };
   } else {
-    const exportedAt = Date.parse(lastExportAt);
+    const exportedAt = Date.parse(lastExportAt.trim());
     const daysSinceExport = Number.isNaN(exportedAt) ? null : Math.floor((now - exportedAt) / DAY_MS);
     const newVisits = Math.max(0, active.length - meta.visits_at_last_export);
     const show =
@@ -108,7 +108,7 @@ export async function diaryExportReminder(): Promise<ExportReminder> {
     return info;
   }
   const visitsGrew = info.newVisits >= dismissed.visitCount + EXPORT_REMINDER_NEW_VISITS;
-  const dismissedAt = Date.parse(dismissed.at);
+  const dismissedAt = Date.parse(dismissed.at.trim());
   const daysSinceDismiss = Number.isNaN(dismissedAt) ? 0 : Math.floor((Date.now() - dismissedAt) / DAY_MS);
   if (visitsGrew || daysSinceDismiss >= EXPORT_REMINDER_DAYS) {
     return info;

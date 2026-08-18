@@ -12,7 +12,7 @@
 
 <section>
   <h2>Wikidata</h2>
-  <p>SPARQL z <code>query.wikidata.org</code> po typech (hrad, zámek, zřícenina, tvrz, rozhledna, zoo, jeskyně). Místa bez GPS se importují ke kontrole. Stažení může trvat několik minut. Průběh zápisu je nahoře jako <strong>kolik z kolika</strong>; v katalogu se místa objeví až po dokončení.</p>
+  <p>SPARQL z <code>query.wikidata.org</code> po typech (hrad, zámek, zřícenina, tvrz, palác, rozhledna, zoo, jeskyně). U existujících QID mimo tyto třídy se doplní fotka z P18. Místa bez GPS se importují ke kontrole. Stažení může trvat několik minut. Průběh zápisu je nahoře jako <strong>kolik z kolika</strong>; v katalogu se místa objeví až po dokončení.</p>
   <form method="post" action="/import/wikidata/preview" class="import-job-form">
     <label>
       <input type="checkbox" name="use_cache" value="1">
@@ -120,11 +120,14 @@
 
 <section>
   <h2>Přístupnost z oficiálních webů</h2>
-  <p>Jen místa se stavem <strong>Neznámé</strong> a vyplněným oficiálním webem. Stáhne se homepage a hledají se návštěvní signály (prohlídky, vstupenky, otevírací doba). HTML ani autorský text se neukládá. Hrady.cz a Kudy z nudy se nescrapují. Tempo je omezené (asi 1 stránka za sekundu).</p>
+  <p>Hromadně všechna místa s oficiálním webem, kde chybí přístupnost nebo odkaz na otevírací dobu / vstupné. Pole <code>public_id</code> je jen na zúžení výběru. Stáhne se homepage, JSON-LD a odkazy. U vybraných i hromadných mezer se ověří konvenční NPÚ cesty (404 se nezapíše). HTML ani autorský text se neukládá. Hrady.cz a Kudy z nudy se nescrapují. Tempo je omezené (asi 1 stránka za sekundu).</p>
   <form method="post" action="/import/official_web/preview" class="import-job-form">
     <label>
       <input type="checkbox" name="use_cache" value="1">
       Použít poslední klasifikaci (bez sítě)
+    </label>
+    <label>Jen tato místa (<code>public_id</code>, volitelné)
+      <textarea name="public_ids" rows="3" placeholder="jedno ID na řádek"></textarea>
     </label>
     <div class="actions-row">
       <button type="submit" {% if import_busy %}disabled{% endif %}>Náhled webů</button>

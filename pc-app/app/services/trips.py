@@ -18,6 +18,13 @@ class TripInputError(VisitInputError):
     """Neplatný formulář výletu."""
 
 
+def default_trip_name(planned_on: str | None = None) -> str:
+    day = planned_on or today_iso_date()
+    if len(day) >= 10 and day[4] == "-" and day[7] == "-":
+        return f"Výlet {int(day[8:10])}. {int(day[5:7])}. {day[:4]}"
+    return "Výlet"
+
+
 def list_trips(session: Session, *, include_deleted: bool = False) -> list[Trip]:
     stmt = select(Trip)
     if not include_deleted:
@@ -59,7 +66,7 @@ def create_trip(
     origin_longitude: float | None = None,
     origin_label: str | None = None,
 ) -> Trip:
-    title = (name or "").strip() or "Výlet"
+    title = (name or "").strip() or default_trip_name(planned_on)
     try:
         date_value = _parse_visited_at(planned_on) if planned_on else None
     except VisitInputError as exc:

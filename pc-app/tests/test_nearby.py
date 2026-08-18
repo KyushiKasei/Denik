@@ -207,10 +207,23 @@ def test_nearby_page_lists_hits(client) -> None:
     assert 'id="nearby-map-data"' in page.text
     nearby_js = client.get("/static/nearby.js").text
     assert "marker-icon.png" in nearby_js
-    assert "center: [lat, lon]" in nearby_js
+    assert 'data.mode === "atlas"' in nearby_js
+    assert "atlasTimeline" in nearby_js
     named = client.get("/nearby", params={"q": "Bouzov", "radius_km": "30"})
     assert named.status_code == 200
     assert "Bouzov" in named.text
     suggest = client.get("/nearby/suggest", params={"q": "Bou"})
     assert suggest.status_code == 200
     assert "Bouzov" in suggest.text
+
+
+def test_nearby_caps_to_nearest(session: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("app.services.nearby.MAX_NEARBY_HITS", 1)
+    _place(session, name="Tady")
+    _place(session, name="Dál", latitude=EAST[0], longitude=EAST[1], municipality="Loštice")
+    from app.services.nearby import Origin
+
+    origin = Origin(latitude=BOUZOV[0], longitude=BOUZOV[1], label="tady", source="coords")
+    result = list_nearby(session, origin, radius_km=30)
+    assert result.hits_total == 2
+    assert [hit.place.name for hit in result.hits] == ["Tady"]

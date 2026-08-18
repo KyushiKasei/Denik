@@ -1,0 +1,49 @@
+{% if trip_today %}
+<section class="trip-today">
+  <h2>Dnešní výlet</h2>
+  <p>
+    <a href="/trips/{{ trip_today.trip.public_id }}">{{ trip_today.trip.name }}</a>
+    {% if trip_today.trip.planned_on %} · {{ format_visit_date(trip_today.trip.planned_on) }}{% endif %}
+    · {{ trip_today.done_count }} / {{ trip_today.stops | length }} zastávek
+    {% if trip_today.air_km is not none %} · {{ "%.0f"|format(trip_today.air_km) }} km vzduchem{% endif %}
+  </p>
+  {% if trip_today.next_stop %}
+  <p>
+    Další zastávka:
+    <a href="/places/{{ trip_today.next_stop.place_id }}#denik">{{ trip_today.next_stop.name }}</a>
+    {% if trip_today.next_stop.stamped_today %} · dnes orazítkováno{% endif %}
+  </p>
+  {% elif trip_today.all_done %}
+  <p class="muted">Všechny zastávky mají návštěvu.</p>
+  {% endif %}
+  {% if trip_today.stops %}
+  <ol class="trip-today-stops">
+    {% for stop in trip_today.stops %}
+    <li class="{% if stop.done %}is-done{% endif %}">
+      <a href="/places/{{ stop.place_id }}#denik">{{ stop.name }}</a>
+      {% if stop.done %} · hotovo{% endif %}
+      {% if stop.stamped_today %} · dnes{% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if recent_stamps %}
+<section class="recent-stamps">
+  <h2>Poslední otisky</h2>
+  <ul class="yearbook-stamps recent-stamp-row">
+    {% for stamp in recent_stamps %}
+    <li>
+      <a href="/places/{{ stamp.place_id }}#denik" class="passport-stamp">
+        {{ stamp_svg(stamp.kind, stamp.wax, size=56) }}
+        <span class="passport-stamp-name">{{ stamp.name }}</span>
+        <span class="muted small">{{ format_visit_date(stamp.visited_at) }}</span>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  <p class="muted"><a href="/diary">Otevřít pas</a> · <a href="/yearbook">Ročenka</a></p>
+</section>
+{% endif %}

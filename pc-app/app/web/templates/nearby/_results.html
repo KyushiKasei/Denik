@@ -1,11 +1,39 @@
-{% if result.error %}
+{% if view == "atlas" %}
+<p class="muted">{{ atlas_markers | length }} míst na mapě{% if region %} · {{ region }}{% endif %}.</p>
+{% if map_data %}
+<script type="application/json" id="nearby-map-data">{{ map_data | tojson }}</script>
+{% endif %}
+{% if atlas_markers %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Název</th>
+        <th>Deník</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in atlas_markers %}
+      <tr>
+        <td><a href="/places/{{ item.id }}">{{ item.name }}</a></td>
+        <td>{% if item.visited %}navštíveno{% elif item.want %}chci navštívit{% else %}—{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="muted">Zatím žádné razítko ani místo k návštěvě s GPS. Importujte deník, nebo označte „chci navštívit“.</p>
+{% endif %}
+{% elif result.error %}
 <p class="error">{{ result.error }}</p>
 {% endif %}
+{% if view != "atlas" %}
 {% if result.origin %}
 <p class="muted">
   Od: {{ result.origin.label }}
   ({{ "%.5f"|format(result.origin.latitude) }}, {{ "%.5f"|format(result.origin.longitude) }})
-  · {{ result.hits | length }} v radiusu {{ result.radius_km }} km
+  · {% if result.hits_total > (result.hits | length) %}nejbližších {{ result.hits | length }} z {{ result.hits_total }}{% else %}{{ result.hits | length }}{% endif %} v radiusu {{ result.radius_km }} km
   · přeskočeno bez GPS: {{ result.skipped_no_gps }}
 </p>
 {% if map_data %}
@@ -28,7 +56,7 @@
       {% for hit in result.hits %}
       <tr>
         <td>{{ "%.1f"|format(hit.km) }}</td>
-        <td><a href="/places/{{ hit.place.public_id }}">{{ hit.place.name }}</a></td>
+        <td><a href="/places/{{ hit.place.public_id }}">{{ hit.place.name | display_place_name }}</a></td>
         <td>{{ hit.place.types_cs }}</td>
         <td>{{ hit.place.municipality or "—" }}</td>
         <td class="muted">{{ "%.5f"|format(hit.place.latitude) }}, {{ "%.5f"|format(hit.place.longitude) }}</td>
@@ -46,3 +74,5 @@
 {% else %}
 <p class="muted">Zadejte GPS, souřadnice, nebo název obce / památky.</p>
 {% endif %}
+{% endif %}
+

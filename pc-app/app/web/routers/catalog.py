@@ -1,19 +1,20 @@
 from __future__ import annotations
 
 import json
+from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from starlette.status import HTTP_303_SEE_OTHER, HTTP_404_NOT_FOUND
 
-from app.config import get_database_path
+from app.config import get_database_path, get_visit_photos_dir
 from app.db.models import Place
 from app.services.backup import list_backups
 from app.deps import db_session
 from app.services.catalog_export import catalog_export_status, export_catalog
-from app.services.trips import add_stop, get_trip, list_upcoming_trips, trips_accepting_place
+from app.services.trips import add_stop, get_trip, list_trips, list_upcoming_trips, trips_accepting_place
 from app.services.diary_io import (
     VisitInputError,
     VisitFilters,
@@ -32,7 +33,40 @@ from app.services.diary_io import (
     update_visit,
 )
 from app.services.diary_schema import DiarySchemaError
+from app.services.diary_bundle import MAX_UPLOAD_BYTES, parse_diary_upload
+from app.services.exchange import (
+    ExchangeError,
+    exchange_status,
+    import_diary_from_exchange,
+    open_in_os,
+    save_exchange_folder,
+    write_catalog_to_exchange,
+)
+from app.services.visit_photos import is_visit_id, list_visit_photos, photos_for_visits
+from app.services.czech_regions import CZECH_REGIONS
+from app.services.diary_present import (
+    ATLAS_CENTER_LAT,
+    ATLAS_CENTER_LON,
+    active_places,
+    atlas_markers,
+    atlas_timeline,
+    badges_for_display,
+    compute_badges,
+    current_year,
+    favorite_place_ids,
+    live_visits,
+    page_for_region,
+    parse_until_param,
+    passport_pages,
+    pick_trip_today,
+    recent_stamps,
+    region_progress,
+    trip_today_progress,
+    yearbook_for,
+)
 from app.services.merge_places import MergeError, find_merge_candidates, merge_places
+from app.importers.official_web.importer import can_enrich_place
+from app.services.import_job import job_is_running
 from app.services.places import (
     PlaceFilters,
     PlaceInput,
@@ -55,6 +89,7 @@ from app.services.geo import (
     RADIUS_STEP_KM,
     clamp_radius_km,
 )
+from app.services.lan_sync import lan_status
 from app.services.nearby import NearbyResult, list_nearby, resolve_origin, suggest_origins
 from app.web.templating import templates
 
@@ -73,6 +108,13 @@ NOTICES = {
     "merge_error": "Sloučení se nepovedlo.",
     "exported": "Katalog byl exportován do catalog.json.",
     "diary_exported": "Deník byl exportován do diary.json.",
+    "folder_opened": "Složka exportu je otevřená.",
+    "exchange_saved": "Složka pro telefon je uložená.",
+    "exchange_opened": "Složka pro telefon je otevřená.",
+    "exchange_catalog": "catalog.json je ve složce pro telefon.",
+    "lan_enabled": "Domácí síť je zapnutá na 15 minut. PIN je na této stránce.",
+    "lan_disabled": "Domácí síť je vypnutá.",
+    "lan_listen_error": "Port 8766 se nepodařilo otevřít. Zkontrolujte, že ho nic jiného nepoužívá, a povolte Windows firewall pro soukromé sítě.",
     "visit_added": "Návštěva je uložená.",
     "visit_updated": "Návštěva je upravená.",
     "visit_deleted": "Návštěva je smazaná. Záznam zůstává v deníku a přenese se při exportu.",
@@ -83,12 +125,24 @@ NOTICES = {
 
 def _notice(request: Request) -> str | None:
     key = request.query_params.get("notice")
+    if key == "exchange_error":
+        reason = (request.query_params.get("reason") or "").strip()
+        return reason or "Složka pro telefon se nepodařila použít."
     return NOTICES.get(key) if key else None
+
+
+def _exchange_error_redirect(exc: ExchangeError) -> RedirectResponse:
+    return RedirectResponse(
+        f"/?notice=exchange_error&reason={quote(str(exc))}",
+        status_code=HTTP_303_SEE_OTHER,
+    )
 
 
 @router.get("/", response_class=HTMLResponse)
 def dashboard(request: Request, session: Session = Depends(db_session)) -> HTMLResponse:
     stats = dashboard_stats(session)
+    visits = live_visits(session)
+    trip = pick_trip_today(session)
     return templates.TemplateResponse(
         request,
         "dashboard.html",
@@ -100,6 +154,10 @@ def dashboard(request: Request, session: Session = Depends(db_session)) -> HTMLR
             "diary_issues": list_open_diary_issues(session),
             "backup_count": len(list_backups(get_database_path())),
             "notice": _notice(request),
+            "trip_today": trip_today_progress(trip, visits, today_iso_date()) if trip is not None else None,
+            "recent_stamps": recent_stamps(visits),
+            "lan": lan_status(),
+            "exchange": exchange_status(),
         },
     )
 
@@ -115,6 +173,46 @@ def visits_page(request: Request, session: Session = Depends(db_session)) -> HTM
             "filters": filters,
             "result": result,
             "notice": _notice(request),
+            "visit_photos": photos_for_visits([visit.public_id for visit in result.visits]),
+        },
+    )
+
+
+@router.get("/diary", response_class=HTMLResponse)
+def diary_passport_page(request: Request, session: Session = Depends(db_session)) -> HTMLResponse:
+    places = active_places(session)
+    visits = live_visits(session)
+    pages = passport_pages(places, visits)
+    progress = region_progress(places, visits)
+    region_id = (request.query_params.get("region") or "").strip().upper() or None
+    return templates.TemplateResponse(
+        request,
+        "diary/passport.html",
+        {
+            "pages": pages,
+            "selected": page_for_region(pages, region_id),
+            "progress": progress,
+            "unlocked_regions": sum(1 for row in progress if row.unlocked),
+            "badges": badges_for_display(compute_badges(visits, places)),
+            "notice": _notice(request),
+        },
+    )
+
+
+@router.get("/yearbook", response_class=HTMLResponse)
+def yearbook_page(request: Request, session: Session = Depends(db_session)) -> HTMLResponse:
+    year = current_year()
+    places = active_places(session)
+    visits = live_visits(session)
+    pages = passport_pages(places, visits)
+    stamps = [stamp for page in pages for stamp in page.stamps][:24]
+    return templates.TemplateResponse(
+        request,
+        "diary/yearbook.html",
+        {
+            "stats": yearbook_for(year, visits, places, list_trips(session), favorite_place_ids(session)),
+            "progress": region_progress(places, visits),
+            "stamps": stamps,
         },
     )
 
@@ -127,6 +225,14 @@ def catalog_export(session: Session = Depends(db_session)) -> FileResponse:
         media_type="application/json; charset=utf-8",
         filename="catalog.json",
     )
+
+
+@router.post("/export/open-folder")
+def open_export_folder() -> RedirectResponse:
+    from app.config import ensure_data_dir
+
+    open_in_os(ensure_data_dir() / "export")
+    return RedirectResponse("/?notice=folder_opened", status_code=HTTP_303_SEE_OTHER)
 
 
 @router.post("/diary/export")
@@ -144,19 +250,20 @@ async def diary_import_route(
     request: Request,
     session: Session = Depends(db_session),
     file: UploadFile = File(...),
+    family: str | None = Form(default=None),
 ) -> HTMLResponse:
-    raw = await file.read()
+    raw = await file.read(MAX_UPLOAD_BYTES + 1)
     try:
-        data = json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        data, photo_count = parse_diary_upload(raw, file.filename)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
         return templates.TemplateResponse(
             request,
             "diary/import_result.html",
-            {"error": f"Soubor není platný JSON: {exc}", "result": None, "filename": file.filename},
+            {"error": f"Soubor se nepodařilo přečíst: {exc}", "result": None, "filename": file.filename},
             status_code=400,
         )
     try:
-        result = import_diary(session, data)
+        result = import_diary(session, data, family=bool(family))
     except DiarySchemaError as exc:
         return templates.TemplateResponse(
             request,
@@ -167,8 +274,94 @@ async def diary_import_route(
     return templates.TemplateResponse(
         request,
         "diary/import_result.html",
-        {"error": None, "result": result, "filename": file.filename},
+        {"error": None, "result": result, "filename": file.filename, "photo_count": photo_count, "outgoing_path": None},
     )
+
+
+@router.post("/exchange/folder")
+def exchange_folder_save(folder: str = Form("")) -> RedirectResponse:
+    try:
+        save_exchange_folder(folder)
+    except ExchangeError as exc:
+        return _exchange_error_redirect(exc)
+    return RedirectResponse("/?notice=exchange_saved", status_code=HTTP_303_SEE_OTHER)
+
+
+@router.post("/exchange/open-folder")
+def exchange_open_folder() -> RedirectResponse:
+    from app.services.exchange import require_exchange_folder
+
+    try:
+        open_in_os(require_exchange_folder())
+    except ExchangeError as exc:
+        return _exchange_error_redirect(exc)
+    return RedirectResponse("/?notice=exchange_opened", status_code=HTTP_303_SEE_OTHER)
+
+
+@router.post("/exchange/import-diary", response_class=HTMLResponse)
+def exchange_import_diary(request: Request, session: Session = Depends(db_session)) -> HTMLResponse:
+    try:
+        result, photo_count, incoming, outgoing = import_diary_from_exchange(session)
+    except ExchangeError as exc:
+        return templates.TemplateResponse(
+            request,
+            "diary/import_result.html",
+            {"error": str(exc), "result": None, "filename": None, "outgoing_path": None},
+            status_code=400,
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+        return templates.TemplateResponse(
+            request,
+            "diary/import_result.html",
+            {"error": f"Soubor se nepodařilo přečíst: {exc}", "result": None, "filename": None, "outgoing_path": None},
+            status_code=400,
+        )
+    except DiarySchemaError as exc:
+        return templates.TemplateResponse(
+            request,
+            "diary/import_result.html",
+            {"error": str(exc), "result": None, "filename": None, "outgoing_path": None},
+            status_code=400,
+        )
+    return templates.TemplateResponse(
+        request,
+        "diary/import_result.html",
+        {
+            "error": None,
+            "result": result,
+            "filename": incoming.name,
+            "photo_count": photo_count,
+            "outgoing_path": str(outgoing),
+        },
+    )
+
+
+@router.post("/exchange/catalog")
+def exchange_catalog(session: Session = Depends(db_session)) -> RedirectResponse:
+    try:
+        write_catalog_to_exchange(session)
+    except ExchangeError as exc:
+        return _exchange_error_redirect(exc)
+    return RedirectResponse("/?notice=exchange_catalog", status_code=HTTP_303_SEE_OTHER)
+
+
+@router.get("/visit-photos/{visit_id}/{filename}")
+def visit_photo_file(visit_id: str, filename: str) -> FileResponse:
+    from pathlib import Path
+
+    if not is_visit_id(visit_id):
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND)
+    root = get_visit_photos_dir().resolve()
+    folder = (root / visit_id).resolve()
+    path = (folder / Path(filename).name).resolve()
+    try:
+        folder.relative_to(root)
+        path.relative_to(folder)
+    except ValueError as exc:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND) from exc
+    if not path.is_file():
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND)
+    return FileResponse(path)
 
 
 def _nearby_markers(result: NearbyResult) -> list[dict]:
@@ -197,9 +390,27 @@ def nearby_page(request: Request, session: Session = Depends(db_session)) -> HTM
     type_code = (params.get("type") or "").strip()
     visitability = (params.get("visitability") or "").strip()
     journal = (params.get("journal") or "").strip()
+    view = (params.get("view") or "").strip()
+    region = (params.get("region") or "").strip()
+    until = parse_until_param(params.get("until"))
     radius_km = clamp_radius_km(params.get("radius_km"))
-    origin = resolve_origin(session, lat=lat, lon=lon, q=q, origin_label=origin_label)
-    if origin is not None:
+    atlas = view == "atlas"
+    markers: list[dict] = []
+    origin = None if atlas else resolve_origin(session, lat=lat, lon=lon, q=q, origin_label=origin_label)
+    if atlas:
+        markers = atlas_markers(session, region_raw=region or None)
+        timeline = atlas_timeline(live_visits(session), region_raw=region or None)
+        result = NearbyResult(origin=None, radius_km=radius_km, hits=[], skipped_no_gps=0, error=None)
+        map_data = {
+            "mode": "atlas",
+            "lat": ATLAS_CENTER_LAT,
+            "lon": ATLAS_CENTER_LON,
+            "radius": 0,
+            "markers": markers,
+            "timeline": timeline,
+            "until": until,
+        }
+    elif origin is not None:
         result = list_nearby(
             session,
             origin,
@@ -211,11 +422,19 @@ def nearby_page(request: Request, session: Session = Depends(db_session)) -> HTM
         lat = f"{origin.latitude:.6f}".rstrip("0").rstrip(".")
         lon = f"{origin.longitude:.6f}".rstrip("0").rstrip(".")
         origin_label = origin.label
+        map_data = {
+            "mode": "nearby",
+            "lat": result.origin.latitude,
+            "lon": result.origin.longitude,
+            "radius": result.radius_km,
+            "markers": _nearby_markers(result),
+        }
     else:
         error = None
         if q or lat or lon:
             error = "Místo se nepodařilo najít. Zkuste jiný název, nebo zadejte souřadnice."
         result = NearbyResult(origin=None, radius_km=radius_km, hits=[], skipped_no_gps=0, error=error)
+        map_data = None
     return templates.TemplateResponse(
         request,
         "nearby.html",
@@ -232,17 +451,13 @@ def nearby_page(request: Request, session: Session = Depends(db_session)) -> HTM
             "visitability": visitability,
             "visitability_counts": None,
             "journal": journal,
+            "view": view,
+            "region": region,
+            "until": until or "",
+            "atlas_markers": markers,
+            "czech_regions": CZECH_REGIONS,
             "result": result,
-            "map_data": (
-                {
-                    "lat": result.origin.latitude,
-                    "lon": result.origin.longitude,
-                    "radius": result.radius_km,
-                    "markers": _nearby_markers(result),
-                }
-                if result.origin is not None
-                else None
-            ),
+            "map_data": map_data,
             "place_types": all_place_types(session),
             **form_context(),
         },
@@ -352,14 +567,21 @@ def _place_detail_context(
             form = _visit_form_from_visit(visit)
         else:
             edit_id = None
+    visits = list_visits_for_place(session, place)
     return {
         "place": place,
-        "visits": list_visits_for_place(session, place),
+        "visits": visits,
         "journal_state": place.journal_state,
         "notice": _notice(request),
         "visit_form": form or _empty_visit_form(),
         "editing_visit_id": edit_id,
         "upcoming_trips": trips_accepting_place(session, place),
+        "official_web_enrichable": can_enrich_place(place),
+        "import_busy": job_is_running(),
+        "visit_photos": {
+            visit.public_id: [path.name for path in list_visit_photos(visit.public_id)]
+            for visit in visits
+        },
         **form_context(),
     }
 

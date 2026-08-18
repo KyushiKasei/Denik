@@ -38,7 +38,7 @@ export function RouteLinks({ dest, destName, origin, promptMap = false, showHint
       {showHint ? <p className="muted small">Trasa vede v Mapy.cz / Apple Maps, ne v této aplikaci.</p> : null}
       {!origin && promptMap ? (
         <p className="muted small">
-          Pro výchozí bod nastavte polohu na <Link to="/map">Mapě</Link>, nebo otevřete jen cíl.
+          Pro výchozí bod nastavte polohu na záložce <Link to="/map">Mapa</Link>, nebo otevřete jen cíl.
         </p>
       ) : null}
     </div>

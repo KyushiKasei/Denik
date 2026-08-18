@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 import io
 import re
-from typing import Any, Iterable
+from typing import Iterable
 
 from app.importers.base import CanonicalRecord
 from app.importers.http_client import decode_text
@@ -97,6 +97,19 @@ def parse_csv_path_text(text: str) -> list[dict[str, str]]:
     return _parse_csv_text(text)
 
 
+def first_location_part(raw: str | None) -> tuple[str | None, bool]:
+    """Hodnota se středníkem je slepená. Vrátí první díl a příznak slepení."""
+    if not raw:
+        return None, False
+    text = raw.strip()
+    if not text:
+        return None, False
+    if ";" not in text:
+        return text, False
+    first = text.split(";", 1)[0].strip()
+    return (first or None), True
+
+
 def _record_from_row(row: dict[str, str], dataset: str, fetched_at: str) -> CanonicalRecord | None:
     catalog_id = cell(row, "katalogové_číslo", "katalogove_cislo")
     name = cell(row, "název", "nazev")
@@ -108,6 +121,9 @@ def _record_from_row(row: dict[str, str], dataset: str, fetched_at: str) -> Cano
     external_ids: dict[str, str] = {SOURCE_TYPE: catalog_id}
     if uskp:
         external_ids["uskp"] = uskp
+    municipality, glued_mun = first_location_part(cell(row, "obec"))
+    district, glued_dist = first_location_part(cell(row, "okres"))
+    glued = glued_mun or glued_dist
     return CanonicalRecord(
         source_type=SOURCE_TYPE,
         external_id=catalog_id,
@@ -115,15 +131,15 @@ def _record_from_row(row: dict[str, str], dataset: str, fetched_at: str) -> Cano
         name=name,
         types=types_from_name(name),
         address=cell(row, "adresa"),
-        municipality=cell(row, "obec"),
-        district=cell(row, "okres"),
+        municipality=municipality,
+        district=district,
         region=cell(row, "kraj"),
         short_description=cell(row, "anotace"),
         heritage_status=heritage,
         unesco=unesco,
         source_url=f"{CATALOG_BASE}/{catalog_id}",
         license=LICENSE,
-        raw={"dataset": dataset, "row": row},
+        raw={"dataset": dataset, "row": row, "glued_location": glued},
         fetched_at=fetched_at,
     )
 

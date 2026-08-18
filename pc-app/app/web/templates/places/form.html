@@ -154,6 +154,56 @@
       <input type="url" name="opening_hours_url" value="{{ form.opening_hours_url or '' }}">
       {% if form.errors.opening_hours_url %}<small class="error">{{ form.errors.opening_hours_url }}</small>{% endif %}
     </label>
+    <label class="{% if form.errors.osm_opening_hours %}field-error{% endif %}">OSM hodiny
+      <input type="text" name="osm_opening_hours" value="{{ form.osm_opening_hours or '' }}" maxlength="500" placeholder="Mo-Su 09:00-16:00">
+      {% if form.errors.osm_opening_hours %}<small class="error">{{ form.errors.osm_opening_hours }}</small>{% endif %}
+    </label>
+    <label class="{% if form.errors.last_entry %}field-error{% endif %}">Poslední vstup
+      <input type="text" name="last_entry" value="{{ form.last_entry or '' }}" maxlength="40" placeholder="15:30">
+      {% if form.errors.last_entry %}<small class="error">{{ form.errors.last_entry }}</small>{% endif %}
+    </label>
+    <label class="{% if form.errors.visit_duration_minutes %}field-error{% endif %}">Délka prohlídky (min)
+      <input type="number" name="visit_duration_minutes" min="1" max="1440" value="{{ form.visit_duration_minutes or '' }}">
+      {% if form.errors.visit_duration_minutes %}<small class="error">{{ form.errors.visit_duration_minutes }}</small>{% endif %}
+    </label>
+    <label class="{% if form.errors.phone %}field-error{% endif %}">Telefon
+      <input type="text" name="phone" value="{{ form.phone or '' }}" maxlength="80">
+      {% if form.errors.phone %}<small class="error">{{ form.errors.phone }}</small>{% endif %}
+    </label>
+    <label class="{% if form.errors.fee %}field-error{% endif %}">Vstupné (OSM)
+      <input type="text" name="fee" value="{{ form.fee or '' }}" maxlength="40" placeholder="yes / no">
+      {% if form.errors.fee %}<small class="error">{{ form.errors.fee }}</small>{% endif %}
+    </label>
+    <label class="{% if form.errors.wheelchair %}field-error{% endif %}">Bezbariérovost
+      <input type="text" name="wheelchair" value="{{ form.wheelchair or '' }}" maxlength="40" placeholder="yes / limited / no">
+      {% if form.errors.wheelchair %}<small class="error">{{ form.errors.wheelchair }}</small>{% endif %}
+    </label>
+    <label class="{% if form.errors.parking %}field-error{% endif %}">Parkování
+      <input type="text" name="parking" value="{{ form.parking or '' }}" maxlength="80">
+      {% if form.errors.parking %}<small class="error">{{ form.errors.parking }}</small>{% endif %}
+    </label>
+    <label class="{% if form.errors.dogs %}field-error{% endif %}">Psi (OSM)
+      <input type="text" name="dogs" value="{{ form.dogs or '' }}" maxlength="40" placeholder="yes / no / leashed">
+      {% if form.errors.dogs %}<small class="error">{{ form.errors.dogs }}</small>{% endif %}
+    </label>
+    <label class="{% if form.errors.payment %}field-error{% endif %}">Platba
+      <input type="text" name="payment" value="{{ form.payment or '' }}" maxlength="40" placeholder="cash / cards / cash_and_cards">
+      {% if form.errors.payment %}<small class="error">{{ form.errors.payment }}</small>{% endif %}
+    </label>
+    <label class="{% if form.errors.architectural_style %}field-error{% endif %}">Sloh
+      <input type="text" name="architectural_style" value="{{ form.architectural_style or '' }}" maxlength="120">
+      {% if form.errors.architectural_style %}<small class="error">{{ form.errors.architectural_style }}</small>{% endif %}
+    </label>
+    <label class="{% if form.errors.inception_year %}field-error{% endif %}">Rok vzniku
+      <input type="number" name="inception_year" min="100" max="2100" value="{{ form.inception_year or '' }}">
+      {% if form.errors.inception_year %}<small class="error">{{ form.errors.inception_year }}</small>{% endif %}
+    </label>
+    <fieldset>
+      <legend>Zázemí poblíž</legend>
+      <label><input type="checkbox" name="amenities" value="toilets" {% if "toilets" in form.amenities %}checked{% endif %}> toalety</label>
+      <label><input type="checkbox" name="amenities" value="cafe" {% if "cafe" in form.amenities %}checked{% endif %}> kavárna / občerstvení</label>
+      <label><input type="checkbox" name="amenities" value="playground" {% if "playground" in form.amenities %}checked{% endif %}> hřiště</label>
+    </fieldset>
     <label class="{% if form.errors.ticket_url %}field-error{% endif %}">Vstupenky (URL)
       <input type="url" name="ticket_url" value="{{ form.ticket_url or '' }}">
       {% if form.errors.ticket_url %}<small class="error">{{ form.errors.ticket_url }}</small>{% endif %}

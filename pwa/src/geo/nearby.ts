@@ -4,9 +4,21 @@ import { filterPlaces } from "../catalog/filterPlaces";
 import { hasGps } from "../catalog/labels";
 import { clampRadiusKm, haversineKm } from "./haversine";
 
+export const MAX_NEARBY_HITS = 200;
+
 export interface NearbyHit {
   place: CatalogPlace;
   km: number;
+}
+
+export interface NearbyList {
+  hits: NearbyHit[];
+  skippedNoGps: number;
+  hitsTotal: number;
+}
+
+export function capNearbyHits(hits: NearbyHit[]): Pick<NearbyList, "hits" | "hitsTotal"> {
+  return { hits: hits.slice(0, MAX_NEARBY_HITS), hitsTotal: hits.length };
 }
 
 export function placesNearby(
@@ -15,7 +27,7 @@ export function placesNearby(
   radiusKm: number,
   filters: PlaceFilters,
   diary?: DiaryFilterSets,
-): { hits: NearbyHit[]; skippedNoGps: number } {
+): NearbyList {
   const skippedNoGps = places.filter((place) => !hasGps(place)).length;
   const radius = clampRadiusKm(radiusKm);
   const withGps = places.filter(hasGps);
@@ -29,5 +41,5 @@ export function placesNearby(
     hits.push({ place, km });
   }
   hits.sort((a, b) => a.km - b.km || a.place.name.localeCompare(b.place.name, "cs"));
-  return { hits, skippedNoGps };
+  return { skippedNoGps, ...capNearbyHits(hits) };
 }

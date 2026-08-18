@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import REPO_ROOT, get_data_dir
-from app.db.models import Place, PlacePhoto, now_iso
+from app.db.models import Place, now_iso
 from app.importers.base import CanonicalRecord
 from app.importers.wikimedia_commons.client import CommonsClient
 from app.importers.wikimedia_commons.parser import commons_filename, records_from_imageinfo

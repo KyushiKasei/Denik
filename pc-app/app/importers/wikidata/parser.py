@@ -7,6 +7,7 @@ from typing import Any
 from urllib.parse import quote, unquote, urlparse
 
 from app.importers.base import CanonicalRecord
+from app.importers.wikidata.query import CONDITION_KEY, STYLE_KEY, TYPE_CLASSES
 
 SOURCE_TYPE = "wikidata"
 LICENSE = "CC0"
@@ -126,6 +127,131 @@ def _empty(value: Any) -> bool:
     return value is None or value == "" or value == []
 
 
+CONDITION_RANK = {
+    "EXTINCT": 5,
+    "REMAINS": 4,
+    "RUIN": 3,
+    "REBUILT": 2,
+    "PRESERVED": 1,
+}
+
+# P5816 state of conservation
+_CONSERVATION = {
+    "Q56556832": "PRESERVED",
+    "Q63135314": "PRESERVED",
+    "Q106574654": "REBUILT",
+    "Q56557159": "RUIN",
+    "Q106575004": "RUIN",
+    "Q56689024": "EXTINCT",
+}
+
+# P31 that means the building is gone or only archaeology remains
+_GONE_INSTANCE = {
+    "Q177751": "EXTINCT",
+    "Q19860854": "EXTINCT",
+    "Q839818": "REMAINS",
+}
+
+
+def prefer_condition(current: str | None, incoming: str | None) -> str | None:
+    if not incoming:
+        return current
+    if not current:
+        return incoming
+    return incoming if CONDITION_RANK.get(incoming, 0) > CONDITION_RANK.get(current, 0) else current
+
+
+def condition_from_binding(binding: dict[str, Any], extra_type: str | None = None) -> str | None:
+    if binding_value(binding, "dissolved"):
+        return "EXTINCT"
+    mapped = _CONSERVATION.get(qid_from_uri(binding_value(binding, "conservation")) or "")
+    gone = _GONE_INSTANCE.get(qid_from_uri(binding_value(binding, "goneClass")) or "")
+    chosen = prefer_condition(mapped, gone)
+    if chosen:
+        return chosen
+    if extra_type == "RUIN":
+        return "RUIN"
+    return None
+
+
+_YEAR_RE = re.compile(r"(\d{3,4})")
+
+
+def inception_year_from_value(value: str | None) -> int | None:
+    if not value:
+        return None
+    match = _YEAR_RE.search(value)
+    if not match:
+        return None
+    year = int(match.group(1))
+    if 100 <= year <= 2100:
+        return year
+    return None
+
+
+def apply_style_bindings(records: list[CanonicalRecord], payload: dict[str, Any]) -> int:
+    """Doplní P571 / P149 z dávkového SPARQL."""
+    results = payload.get("results") if isinstance(payload, dict) else None
+    bindings = results.get("bindings") if isinstance(results, dict) else None
+    if not isinstance(bindings, list):
+        return 0
+    by_qid: dict[str, CanonicalRecord] = {
+        record.external_id: record for record in records if record.external_id
+    }
+    updated = 0
+    for binding in bindings:
+        if not isinstance(binding, dict):
+            continue
+        qid = qid_from_uri(binding_value(binding, "item"))
+        record = by_qid.get(qid) if qid else None
+        if record is None:
+            continue
+        year = inception_year_from_value(binding_value(binding, "inception"))
+        style = binding_value(binding, "styleLabel")
+        if style and _QID_RE.match(style):
+            style = None
+        if style:
+            style = style[:120]
+        changed = False
+        if year is not None and record.inception_year is None:
+            record.inception_year = year
+            changed = True
+        if style and not record.architectural_style:
+            record.architectural_style = style
+            changed = True
+        if changed:
+            updated += 1
+    return updated
+
+
+def apply_condition_bindings(records: list[CanonicalRecord], payload: dict[str, Any]) -> int:
+    """Doplní condition z dávkového SPARQL (P5816 / P576 / zaniklé P31)."""
+    results = payload.get("results") if isinstance(payload, dict) else None
+    bindings = results.get("bindings") if isinstance(results, dict) else None
+    if not isinstance(bindings, list):
+        return 0
+    by_qid: dict[str, CanonicalRecord] = {
+        record.external_id: record for record in records if record.external_id
+    }
+    updated = 0
+    for binding in bindings:
+        if not isinstance(binding, dict):
+            continue
+        qid = qid_from_uri(binding_value(binding, "item"))
+        record = by_qid.get(qid) if qid else None
+        if record is None:
+            continue
+        incoming = condition_from_binding(binding)
+        merged = prefer_condition(record.condition, incoming)
+        if merged and merged != record.condition:
+            record.condition = merged
+            updated += 1
+        elif record.condition is None and merged:
+            record.condition = merged
+            updated += 1
+    return updated
+
+
 def merge_records(records: list[CanonicalRecord]) -> list[CanonicalRecord]:
     """Sloučí duplicitní SPARQL řádky a stejné QID z více typových dotazů."""
     by_qid: dict[str, CanonicalRecord] = {}
@@ -165,9 +291,12 @@ def _merge_into(target: CanonicalRecord, incoming: CanonicalRecord) -> None:
         "license",
         "fetched_at",
         "visitability",
+        "inception_year",
+        "architectural_style",
     ):
         if _empty(getattr(target, field_name)) and not _empty(getattr(incoming, field_name)):
             setattr(target, field_name, getattr(incoming, field_name))
+    target.condition = prefer_condition(target.condition, incoming.condition)
     if target.image is None and incoming.image is not None:
         target.image = incoming.image
     raw_rows = []
@@ -202,6 +331,29 @@ def parse_sparql_response(
     return merge_records(records)
 
 
+def qids_in_bundle(bundle: dict[str, Any]) -> set[str]:
+    """QID z typového bundle i z doplňkového SPARQL existujících položek."""
+    found: set[str] = set()
+    if "results" in bundle and "head" in bundle:
+        payloads: list[Any] = [bundle]
+    else:
+        payloads = list(bundle.values())
+    for payload in payloads:
+        if not isinstance(payload, dict):
+            continue
+        results = payload.get("results")
+        bindings = results.get("bindings") if isinstance(results, dict) else None
+        if not isinstance(bindings, list):
+            continue
+        for binding in bindings:
+            if not isinstance(binding, dict):
+                continue
+            qid = qid_from_uri(binding_value(binding, "item"))
+            if qid:
+                found.add(qid)
+    return found
+
+
 def records_from_bundle(bundle: dict[str, Any], fetched_at: str) -> list[CanonicalRecord]:
     """Bundle {TYPE_CODE: sparql_json} nebo holá SPARQL odpověď."""
     if "results" in bundle and "head" in bundle:
@@ -210,12 +362,25 @@ def records_from_bundle(bundle: dict[str, Any], fetched_at: str) -> list[Canonic
         return parse_sparql_response(bundle, extra_type=extra_type, fetched_at=fetched_at)
     records: list[CanonicalRecord] = []
     for type_code, payload in bundle.items():
+        if type_code == CONDITION_KEY or type_code == STYLE_KEY:
+            continue
         if not isinstance(payload, dict) or "results" not in payload:
             continue
+        extra_type = type_code if type_code in TYPE_CLASSES else None
         records.extend(
-            parse_sparql_response(payload, extra_type=str(type_code), fetched_at=fetched_at)
+            parse_sparql_response(payload, extra_type=extra_type, fetched_at=fetched_at)
         )
-    return merge_records(records)
+    merged = merge_records(records)
+    condition_payload = bundle.get(CONDITION_KEY)
+    if isinstance(condition_payload, dict):
+        apply_condition_bindings(merged, condition_payload)
+    style_payload = bundle.get(STYLE_KEY)
+    if isinstance(style_payload, dict):
+        apply_style_bindings(merged, style_payload)
+    for record in merged:
+        if not record.types:
+            record.allow_create = False
+    return merged
 
 
 def _record_from_binding(
@@ -259,6 +424,7 @@ def _record_from_binding(
         region=binding_value(binding, "krajLabel"),
         official_website=website,
         wikipedia_url=wikipedia,
+        condition=condition_from_binding(binding, extra_type),
         visitability="FREE_ACCESS" if extra_type == "RUIN" else None,
         source_url=f"https://www.wikidata.org/wiki/{qid}",
         license=LICENSE,

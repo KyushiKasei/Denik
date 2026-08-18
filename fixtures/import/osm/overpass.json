@@ -11,7 +11,25 @@
         "wikidata": "Q122922",
         "wikipedia": "cs:Bouzov (hrad)",
         "website": "https://www.hrad-bouzov.cz/",
-        "opening_hours": "Mo-Su 09:00-16:00"
+        "opening_hours": "Mo-Su 09:00-16:00",
+        "phone": "+420 585 346 201",
+        "fee": "yes",
+        "wheelchair": "limited",
+        "parking": "yes",
+        "duration": "90",
+        "dogs": "no",
+        "payment:cash": "yes",
+        "toilets": "yes"
+      }
+    },
+    {
+      "type": "node",
+      "id": 999002,
+      "lat": 49.7042,
+      "lon": 16.8913,
+      "tags": {
+        "amenity": "cafe",
+        "name": "Hradní kavárna"
       }
     },
     {

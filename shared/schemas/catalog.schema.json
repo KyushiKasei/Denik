@@ -211,7 +211,36 @@
             { "type": "null" },
             { "$ref": "#/$defs/image" }
           ]
-        }
+        },
+        "osm_opening_hours": { "$ref": "#/$defs/stringOrNull" },
+        "phone": { "$ref": "#/$defs/stringOrNull" },
+        "fee": { "$ref": "#/$defs/stringOrNull" },
+        "wheelchair": { "$ref": "#/$defs/stringOrNull" },
+        "parking": { "$ref": "#/$defs/stringOrNull" },
+        "visit_duration_minutes": {
+          "anyOf": [
+            { "type": "null" },
+            { "type": "integer", "minimum": 1, "maximum": 1440 }
+          ]
+        },
+        "last_entry": { "$ref": "#/$defs/stringOrNull" },
+        "dogs": { "$ref": "#/$defs/stringOrNull" },
+        "payment": { "$ref": "#/$defs/stringOrNull" },
+        "amenities": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["toilets", "cafe", "playground"]
+          },
+          "uniqueItems": true
+        },
+        "inception_year": {
+          "anyOf": [
+            { "type": "null" },
+            { "type": "integer", "minimum": 100, "maximum": 2100 }
+          ]
+        },
+        "architectural_style": { "$ref": "#/$defs/stringOrNull" }
       }
     }
   }

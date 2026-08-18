@@ -1,0 +1,52 @@
+<section class="lan-panel" id="lan-panel">
+  <h2>Domácí Wi-Fi</h2>
+  <p>Volitelná relace na 15 minut. QR otevře Safari, nespáruje PWA na ploše — deník zůstává v ikoně. V Safari nahrajete export a stáhnete sloučený zip. Administrace zůstává jen na tomto počítači.</p>
+  {% if lan.active %}
+  <p>PIN zadejte na telefonu:</p>
+  <p class="lan-pin" aria-label="PIN">{{ lan.pin }}</p>
+  {% if lan.urls %}
+  <p>Na telefonu otevřete:</p>
+  <ul>
+    {% for url in lan.urls %}
+    <li><code>{{ url }}</code></li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  {% if lan.qr_svg %}
+  <div class="lan-qr">{{ lan.qr_svg | safe }}</div>
+  {% endif %}
+  <p class="muted" id="lan-remaining" data-seconds="{{ lan.remaining_seconds }}">Zbývá {{ (lan.remaining_seconds // 60) }}:{{ '%02d' % (lan.remaining_seconds % 60) }}</p>
+  <p class="muted">Windows firewall při prvním zapnutí může zeptat — povolte jen soukromé sítě. Guest Wi-Fi s izolací klientů telefon k PC nepustí.</p>
+  <form method="post" action="/lan/disable">
+    <button type="submit" class="secondary">Vypnout domácí síť</button>
+  </form>
+  {% else %}
+  <form method="post" action="/lan/enable">
+    <button type="submit">Povolit domácí síť na 15 min</button>
+  </form>
+  {% endif %}
+</section>
+<script>
+  (function () {
+    var el = document.getElementById("lan-remaining");
+    if (!el) {
+      return;
+    }
+    var left = parseInt(el.getAttribute("data-seconds"), 10);
+    if (isNaN(left)) {
+      return;
+    }
+    function tick() {
+      if (left <= 0) {
+        el.textContent = "Relace skončila. Obnovte stránku.";
+        return;
+      }
+      var minutes = Math.floor(left / 60);
+      var seconds = left % 60;
+      el.textContent = "Zbývá " + minutes + ":" + String(seconds).padStart(2, "0");
+      left -= 1;
+      window.setTimeout(tick, 1000);
+    }
+    tick();
+  })();
+</script>

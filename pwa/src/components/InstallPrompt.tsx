@@ -19,8 +19,15 @@ export function InstallPrompt() {
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
 
   useEffect(() => {
-    if (isStandalone() || localStorage.getItem(DISMISS_KEY) === "1") {
+    if (isStandalone()) {
       return;
+    }
+    try {
+      if (localStorage.getItem(DISMISS_KEY) === "1") {
+        return;
+      }
+    } catch {
+      // private mode
     }
     if (isIos()) {
       setIosHint(true);
@@ -41,7 +48,11 @@ export function InstallPrompt() {
   }
 
   const dismiss = () => {
-    localStorage.setItem(DISMISS_KEY, "1");
+    try {
+      localStorage.setItem(DISMISS_KEY, "1");
+    } catch {
+      // private mode / quota
+    }
     setVisible(false);
   };
 

@@ -207,3 +207,12 @@ def test_place_detail_adds_only_to_upcoming_trip(client) -> None:
     assert ignored.status_code == 303
     past_page = client.get(f"/trips/{past}")
     assert "Bouzov" not in past_page.text
+
+
+def test_default_trip_name_uses_date(client) -> None:
+    page = client.get("/trips")
+    assert page.status_code == 200
+    assert "Výlet " in page.text
+    from app.services.trips import default_trip_name
+
+    assert default_trip_name("2026-08-18") == "Výlet 18. 8. 2026"

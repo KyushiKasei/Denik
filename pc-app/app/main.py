@@ -13,9 +13,11 @@ from app.db.migrate import run_migrations
 from app.db.seed import seed_place_types
 from app.db.session import get_engine, make_session_factory
 from app.logging_setup import get_logger, setup_logging
+from app.services.lan_sync import stop_lan_session
 from app.web.routers.backup import router as backup_router
 from app.web.routers.catalog import router as catalog_router
 from app.web.routers.imports import router as imports_router
+from app.web.routers.lan_admin import router as lan_admin_router
 from app.web.routers.trips import router as trips_router
 
 STATIC_DIR = Path(__file__).resolve().parent / "web" / "static"
@@ -38,6 +40,7 @@ def _startup() -> None:
 async def lifespan(_app: FastAPI):
     await anyio.to_thread.run_sync(_startup)
     yield
+    stop_lan_session()
 
 
 app = FastAPI(title="Památky — katalog", lifespan=lifespan)
@@ -46,6 +49,12 @@ app.include_router(catalog_router)
 app.include_router(trips_router)
 app.include_router(backup_router)
 app.include_router(imports_router)
+app.include_router(lan_admin_router)
+
+
+@app.get("/health")
+def health() -> dict[str, bool]:
+    return {"ok": True}
 
 
 @app.exception_handler(Exception)

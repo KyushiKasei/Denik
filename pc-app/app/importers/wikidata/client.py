@@ -8,7 +8,14 @@ from typing import Any
 import httpx
 
 from app.importers.http_client import CONNECT_TIMEOUT, RETRY_STATUSES, USER_AGENT
-from app.importers.wikidata.query import TYPE_CLASSES, build_query
+from app.importers.wikidata.query import (
+    TYPE_CLASSES,
+    QID_BATCH_SIZE,
+    build_condition_query,
+    build_items_query,
+    build_query,
+    build_style_query,
+)
 from app.logging_setup import get_logger
 
 ENDPOINT = "https://query.wikidata.org/sparql"
@@ -48,6 +55,52 @@ class WikidataClient:
     def fetch_class(self, class_qid: str) -> dict[str, Any]:
         query = build_query(class_qid)
         return self._request(query, class_qid)
+
+    def fetch_items(self, qids: list[str], on_batch=None) -> dict[str, Any]:
+        """SPARQL pro konkrétní QID — P18 u míst, která typové třídy minuly."""
+        if not qids:
+            return {"head": {"vars": []}, "results": {"bindings": []}}
+        bindings: list[Any] = []
+        batches = [qids[index : index + QID_BATCH_SIZE] for index in range(0, len(qids), QID_BATCH_SIZE)]
+        for index, batch in enumerate(batches, start=1):
+            _log.info("wikidata SPARQL existing qids batch=%s/%s size=%s", index, len(batches), len(batch))
+            if on_batch is not None:
+                on_batch(index, len(batches), len(batch))
+            payload = self._request(build_items_query(batch), f"items:{index}")
+            rows = payload.get("results", {}).get("bindings") if isinstance(payload.get("results"), dict) else None
+            if isinstance(rows, list):
+                bindings.extend(rows)
+        return {"head": {"vars": []}, "results": {"bindings": bindings}}
+
+    def fetch_conditions(self, qids: list[str], on_batch=None) -> dict[str, Any]:
+        if not qids:
+            return {"head": {"vars": []}, "results": {"bindings": []}}
+        bindings: list[Any] = []
+        batches = [qids[index : index + QID_BATCH_SIZE] for index in range(0, len(qids), QID_BATCH_SIZE)]
+        for index, batch in enumerate(batches, start=1):
+            _log.info("wikidata SPARQL condition batch=%s/%s size=%s", index, len(batches), len(batch))
+            if on_batch is not None:
+                on_batch(index, len(batches), len(batch))
+            payload = self._request(build_condition_query(batch), f"condition:{index}")
+            rows = payload.get("results", {}).get("bindings") if isinstance(payload.get("results"), dict) else None
+            if isinstance(rows, list):
+                bindings.extend(rows)
+        return {"head": {"vars": []}, "results": {"bindings": bindings}}
+
+    def fetch_styles(self, qids: list[str], on_batch=None) -> dict[str, Any]:
+        if not qids:
+            return {"head": {"vars": []}, "results": {"bindings": []}}
+        bindings: list[Any] = []
+        batches = [qids[index : index + QID_BATCH_SIZE] for index in range(0, len(qids), QID_BATCH_SIZE)]
+        for index, batch in enumerate(batches, start=1):
+            _log.info("wikidata SPARQL style batch=%s/%s size=%s", index, len(batches), len(batch))
+            if on_batch is not None:
+                on_batch(index, len(batches), len(batch))
+            payload = self._request(build_style_query(batch), f"style:{index}")
+            rows = payload.get("results", {}).get("bindings") if isinstance(payload.get("results"), dict) else None
+            if isinstance(rows, list):
+                bindings.extend(rows)
+        return {"head": {"vars": []}, "results": {"bindings": bindings}}
 
     def fetch_bundle(self, on_type=None) -> dict[str, dict[str, Any]]:
         bundle: dict[str, dict[str, Any]] = {}
@@ -91,7 +144,12 @@ class WikidataClient:
                     return payload
                 except SparqlError:
                     raise
-                except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError) as exc:
+                except (
+                    httpx.TimeoutException,
+                    httpx.NetworkError,
+                    httpx.RemoteProtocolError,
+                    httpx.HTTPStatusError,
+                ) as exc:
                     last_error = exc
                     _log.warning(
                         "wikidata SPARQL class=%s attempt=%s error=%s",

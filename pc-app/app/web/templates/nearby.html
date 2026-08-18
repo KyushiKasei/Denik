@@ -1,15 +1,23 @@
 {% extends "base.html" %}
-{% block title %}Poblíž — Památky{% endblock %}
+{% block title %}{% if view == "atlas" %}Atlas — Památky{% else %}Poblíž — Památky{% endif %}{% endblock %}
 {% block extra_head %}
 <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
 <script src="/static/vendor/leaflet/leaflet.js"></script>
-<script src="/static/nearby.js?v=5" defer></script>
+<script src="/static/nearby.js?v=7" defer></script>
 {% endblock %}
 {% block content %}
 <div class="toolbar">
-  <h1>Poblíž</h1>
+  <h1>{% if view == "atlas" %}Atlas{% else %}Poblíž{% endif %}</h1>
+  <div class="actions-row">
+    <a href="/nearby" role="button"{% if view == "atlas" %} class="secondary"{% endif %}>Poblíž</a>
+    <a href="/nearby?view=atlas" role="button"{% if view != "atlas" %} class="secondary"{% endif %}>Atlas</a>
+  </div>
 </div>
+{% if view == "atlas" %}
+<p class="muted">Navštívená razítka a místa, která chcete navštívit. Bez radiusu od GPS.</p>
+{% else %}
 <p class="muted">Vzdušná čára od GPS, napsaného místa nebo souřadnic. Katalog se nemění.</p>
+{% endif %}
 
 <form class="filters nearby-form" method="get" action="/nearby" id="nearby-form"
       hx-get="/nearby"
@@ -19,6 +27,20 @@
       hx-push-url="true"
       hx-indicator="#nearby-search-status"
       hx-trigger="submit, change delay:200ms from:select, input delay:250ms from:input[type=range]">
+  {% if view == "atlas" %}
+  <input type="hidden" name="view" value="atlas">
+  {% if until %}
+  <input type="hidden" name="until" value="{{ until }}">
+  {% endif %}
+  <label class="span-2">Kraj
+    <select name="region">
+      <option value="">Celé Česko</option>
+      {% for item in czech_regions %}
+      <option value="{{ item.name }}" {% if region == item.name or region == item.id %}selected{% endif %}>{{ item.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  {% else %}
   <label class="span-2">Kde jsem
     <input type="search" name="q" id="nearby-q" value="{{ q }}"
            placeholder="Obec nebo název památky"
@@ -63,9 +85,12 @@
            min="{{ radius_min }}" max="{{ radius_max }}" step="{{ radius_step }}" value="{{ radius_km }}">
   </label>
   <input type="hidden" name="origin_label" id="nearby-origin-label" value="{{ origin_label }}">
+  {% endif %}
   <div class="check-row">
+    {% if view != "atlas" %}
     <button type="button" class="secondary" id="nearby-gps">Tady jsem</button>
-    <button type="submit">Hledat</button>
+    {% endif %}
+    <button type="submit">{% if view == "atlas" %}Filtrovat{% else %}Hledat{% endif %}</button>
     <span id="nearby-search-status" class="htmx-indicator muted">Hledám…</span>
   </div>
   <p id="nearby-gps-error" class="error span-all" role="alert" hidden></p>
@@ -73,11 +98,27 @@
 <div id="nearby-suggest"></div>
 
 <p class="map-legend">
-  <span class="is-visited"><i></i> navštíveno</span>
-  <span class="is-want"><i></i> chci navštívit</span>
-  <span><i></i> ostatní</span>
+  <span class="is-visited"><i></i> {% if view == "atlas" %}otisk{% else %}navštíveno{% endif %}</span>
+  <span class="is-want" id="atlas-legend-want"><i></i> chci navštívit</span>
+  {% if view != "atlas" %}<span><i></i> ostatní</span>{% endif %}
 </p>
-<div id="nearby-map-wrap" class="nearby-map"{% if not result.origin %} hidden{% endif %}>
+{% if view == "atlas" %}
+<div id="atlas-time" class="atlas-time" hidden>
+  <p class="atlas-time-caption" id="atlas-time-caption" role="status"></p>
+  <div class="atlas-time-years" id="atlas-time-years" role="group" aria-label="Rok"></div>
+  <label class="atlas-time-slider">
+    <span class="visually-hidden">Návštěvy v čase</span>
+    <input type="range" id="atlas-time-range" min="0" max="0" value="0">
+  </label>
+  <div class="actions-row">
+    <button type="button" class="secondary" id="atlas-time-prev">Předchozí otisk</button>
+    <button type="button" class="secondary" id="atlas-time-next">Další otisk</button>
+    <button type="button" id="atlas-time-play">Přehrát</button>
+    <button type="button" class="secondary" id="atlas-time-today">Dnes</button>
+  </div>
+</div>
+{% endif %}
+<div id="nearby-map-wrap" class="nearby-map"{% if view != "atlas" and not result.origin %} hidden{% endif %}>
   <div id="nearby-map" class="nearby-map-canvas"></div>
 </div>
 <div id="nearby-results">

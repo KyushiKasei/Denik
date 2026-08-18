@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Můj rok {{ stats.year }} — Památky{% endblock %}
+{% block content %}
+<article class="yearbook">
+  <header class="toolbar">
+    <div>
+      <h1>Můj rok {{ stats.year }}</h1>
+      <p class="muted">
+        {{ stats.unique_places }} míst · {{ stats.visit_count }} návštěv
+        {% if stats.trip_count %} · {{ stats.trip_count }} výletů{% endif %}
+      </p>
+    </div>
+    <div class="actions-row print-hide">
+      <button type="button" class="secondary" onclick="window.print()">Tisk / PDF</button>
+      <a href="/nearby?view=atlas&until={{ stats.year }}-12-31" role="button" class="secondary">Atlas tohoto roku</a>
+      <a href="/diary" role="button" class="secondary">Zpět do pasu</a>
+    </div>
+  </header>
+
+  <section class="regions-map" aria-label="Kraje Česka">
+    <svg viewBox="0 0 1000 580" class="regions-svg" role="img" aria-label="Mapa krajů s návštěvou">
+      {% for row in progress %}
+      <path d="{{ row.region.path }}"
+            class="region-path{% if row.unlocked %} is-unlocked{% endif %}{% if row.visited > 1 %} is-rich{% endif %}">
+        <title>{{ row.region.name }}: {{ row.visited }}</title>
+      </path>
+      {% endfor %}
+    </svg>
+  </section>
+
+  {% if stamps %}
+  <ul class="yearbook-stamps">
+    {% for stamp in stamps %}
+    <li>
+      {{ stamp_svg(stamp.kind, stamp.wax, size=56) }}
+      <span>{{ stamp.name }}</span>
+      <span class="muted small">{{ format_visit_date(stamp.visited_at) }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">Letos zatím žádný otisk.</p>
+  {% endif %}
+
+  {% if stats.top_rated %}
+  <section>
+    <h2>Nejlépe hodnocené</h2>
+    <ol>
+      {% for row in stats.top_rated %}
+      <li>
+        <a href="/places/{{ row.place_id }}">{{ row.name }}</a>
+        · {{ "★" * row.rating }}
+      </li>
+      {% endfor %}
+    </ol>
+  </section>
+  {% endif %}
+
+  {% if stats.people %}
+  <p class="muted">S vámi: {{ stats.people | join(", ") }}</p>
+  {% endif %}
+</article>
+{% endblock %}

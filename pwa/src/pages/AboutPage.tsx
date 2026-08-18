@@ -1,26 +1,43 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { loadCatalogMeta, type CatalogMeta } from "../catalog/importCatalog";
 import { FirstRunCoach } from "../components/FirstRunCoach";
-import { downloadDiaryFile, exportDiary, loadDiaryMeta } from "../diary/store";
+import { downloadDiaryBundle, loadDiaryMeta } from "../diary/store";
 import type { DiaryMeta } from "../diary/types";
+import { formatDateTime } from "../diary/timeline";
 import { isStoragePersisted, persistStorage } from "../storage/persist";
 
 export function AboutPage() {
   const [meta, setMeta] = useState<CatalogMeta | null>(null);
   const [diaryMeta, setDiaryMeta] = useState<DiaryMeta | null>(null);
   const [persisted, setPersisted] = useState<boolean | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [exportBusy, setExportBusy] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     void (async () => {
-      const [catalogMeta, stored, diary] = await Promise.all([
-        loadCatalogMeta(),
-        isStoragePersisted(),
-        loadDiaryMeta(),
-      ]);
-      setMeta(catalogMeta);
-      setPersisted(stored);
-      setDiaryMeta(diary);
+      try {
+        const [catalogMeta, stored, diary] = await Promise.all([
+          loadCatalogMeta(),
+          isStoragePersisted(),
+          loadDiaryMeta(),
+        ]);
+        if (cancelled) {
+          return;
+        }
+        setMeta(catalogMeta);
+        setPersisted(stored);
+        setDiaryMeta(diary);
+      } catch {
+        if (!cancelled) {
+          setLoadError("Informace o katalogu a deníku se nepodařilo načíst.");
+        }
+      }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const requestPersist = async () => {
@@ -32,17 +49,26 @@ export function AboutPage() {
     <section>
       <header className="page-header">
         <h1>Info</h1>
-        <p className="muted">Prázdná schránka aplikace. Katalog se sem z Netlify nestahuje — nahraje se souborem.</p>
+        <p className="muted">Úvodní záložka je Dnes. Katalog se sem z Netlify nestahuje — nahraje se souborem.</p>
       </header>
 
+      {loadError ? (
+        <p className="error" role="alert">
+          {loadError}
+        </p>
+      ) : null}
+
       {meta && meta.catalog_version == null ? <FirstRunCoach catalogLink /> : null}
+
+      <h2>Vzhled</h2>
+      <p className="muted">Světlý, tmavý, nebo podle nastavení systému. Přepínač je na záložce Nastavení.</p>
 
       <h2>Katalog v telefonu</h2>
       {meta?.catalog_version != null ? (
         <ul>
           <li>verze: {meta.catalog_version}</li>
-          {meta.generated_at ? <li>export z PC: {meta.generated_at}</li> : null}
-          {meta.imported_at ? <li>nahráno sem: {meta.imported_at}</li> : null}
+          {meta.generated_at ? <li>export z PC: {formatDateTime(meta.generated_at)}</li> : null}
+          {meta.imported_at ? <li>nahráno sem: {formatDateTime(meta.imported_at)}</li> : null}
         </ul>
       ) : (
         <p>Katalog ještě není nahraný.</p>
@@ -53,20 +79,31 @@ export function AboutPage() {
         Návštěvy, seznam „chci navštívit“ a oblíbené jsou na záložce Deník. Žijí jen v tomto telefonu, dokud
         nevyexportujete <code>diary.json</code>. Připomínka se objeví po 14 dnech nebo po 5 nových návštěvách.
       </p>
-      {diaryMeta?.last_export_at ? <p className="muted">Poslední export: {diaryMeta.last_export_at}</p> : null}
+      {diaryMeta?.last_export_at ? <p className="muted">Poslední export: {formatDateTime(diaryMeta.last_export_at)}</p> : null}
       <p>
         <button
           type="button"
           className="ghost"
+          disabled={exportBusy}
           onClick={() =>
             void (async () => {
-              const diary = await exportDiary();
-              await downloadDiaryFile(diary);
-              setDiaryMeta(await loadDiaryMeta());
+              if (exportBusy) {
+                return;
+              }
+              setExportBusy(true);
+              try {
+                await downloadDiaryBundle();
+                setDiaryMeta(await loadDiaryMeta());
+                setLoadError(null);
+              } catch {
+                setLoadError("Deník se nepodařilo exportovat.");
+              } finally {
+                setExportBusy(false);
+              }
             })()
           }
         >
-          Exportovat diary.json
+          {exportBusy ? "Exportuji…" : "Exportovat deník"}
         </button>
       </p>
 
@@ -97,7 +134,8 @@ export function AboutPage() {
         pokud už nejsou v mezipaměti.
       </p>
       <p className="muted small">
-        Odznaky na záložce Deník se počítají z návštěv v telefonu a do <code>diary.json</code> se neexportují.
+        Odznaky na záložce Deník se počítají z návštěv v telefonu a do <code>diary.json</code> se neexportují.{" "}
+        <Link to="/yearbook">Ročenka k tisku</Link>
       </p>
 
       {meta?.attribution ? (

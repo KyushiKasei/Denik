@@ -95,6 +95,22 @@ def visitability_from_tags(tags: dict[str, str]) -> str | None:
     return None
 
 
+_YES = frozenset({"yes", "true", "1"})
+
+
+def condition_from_tags(tags: dict[str, str]) -> str | None:
+    if any(key.startswith("demolished:") or key.startswith("destroyed:") for key in tags):
+        return "EXTINCT"
+    if (tags.get("demolished") or "").lower() in _YES or (tags.get("destroyed") or "").lower() in _YES:
+        return "EXTINCT"
+    historic = (tags.get("historic") or "").lower()
+    if historic == "archaeological_site":
+        return "REMAINS"
+    if historic == "ruins" or (tags.get("ruins") or "").lower() in _YES:
+        return "RUIN"
+    return None
+
+
 def municipality_from_tags(tags: dict[str, str]) -> str | None:
     for key in ("addr:city", "addr:municipality", "addr:town", "addr:village"):
         value = str(tags.get(key) or "").strip()
@@ -111,6 +127,118 @@ def address_from_tags(tags: dict[str, str]) -> str | None:
     if street:
         return street
     return None
+
+
+def parking_from_tags(tags: dict[str, str]) -> str | None:
+    parking = str(tags.get("parking") or "").strip()
+    if parking:
+        return parking
+    if str(tags.get("parking:fee") or "").strip():
+        return "yes"
+    return None
+
+
+def phone_from_tags(tags: dict[str, str]) -> str | None:
+    for key in ("contact:phone", "phone", "contact:mobile"):
+        value = str(tags.get(key) or "").strip()
+        if value:
+            return value[:80]
+    return None
+
+
+def duration_minutes_from_tags(tags: dict[str, str]) -> int | None:
+    raw = str(tags.get("visit:duration") or tags.get("duration") or "").strip()
+    if raw.isdigit():
+        minutes = int(raw)
+        if 1 <= minutes <= 1440:
+            return minutes
+    match = re.fullmatch(r"(\d+)\s*h(?:our)?s?", raw, re.IGNORECASE)
+    if match:
+        hours = int(match.group(1))
+        minutes = hours * 60
+        if 1 <= minutes <= 1440:
+            return minutes
+    return None
+
+
+def last_entry_from_tags(tags: dict[str, str]) -> str | None:
+    value = str(tags.get("opening_hours:lastentry") or tags.get("last_entry") or "").strip()
+    return value[:40] or None
+
+
+def dogs_from_tags(tags: dict[str, str]) -> str | None:
+    value = str(tags.get("dogs") or tags.get("dog") or "").strip().lower()
+    if value in {"yes", "no", "leashed", "outside"}:
+        return value
+    return value[:40] or None
+
+
+def payment_from_tags(tags: dict[str, str]) -> str | None:
+    cash = str(tags.get("payment:cash") or "").strip().lower()
+    cards = str(
+        tags.get("payment:credit_cards") or tags.get("payment:debit_cards") or tags.get("payment:cards") or ""
+    ).strip().lower()
+    yes = {"yes", "true", "1"}
+    no = {"no", "false", "0"}
+    has_cash = cash in yes
+    no_cash = cash in no
+    has_cards = cards in yes
+    no_cards = cards in no
+    if has_cash and has_cards:
+        return "cash_and_cards"
+    if has_cash and not no_cards:
+        return "cash"
+    if has_cards and not no_cash:
+        return "cards"
+    if no_cash and no_cards:
+        return "unknown"
+    return None
+
+
+def amenities_from_tags(tags: dict[str, str]) -> list[str]:
+    found: list[str] = []
+    if str(tags.get("toilets") or "").strip().lower() in _YES or str(tags.get("amenity") or "") == "toilets":
+        found.append("toilets")
+    if str(tags.get("amenity") or "") in {"cafe", "restaurant", "fast_food"} or str(
+        tags.get("cafe") or ""
+    ).strip().lower() in _YES:
+        found.append("cafe")
+    if str(tags.get("leisure") or "") == "playground":
+        found.append("playground")
+    return found
+
+
+def amenity_kind(tags: dict[str, str]) -> str | None:
+    amenity = str(tags.get("amenity") or "").strip().lower()
+    if amenity == "toilets":
+        return "toilets"
+    if amenity in {"cafe", "restaurant", "fast_food"}:
+        return "cafe"
+    if str(tags.get("leisure") or "").strip().lower() == "playground":
+        return "playground"
+    return None
+
+
+def is_heritage_element(element: dict[str, Any]) -> bool:
+    tags = element.get("tags") if isinstance(element.get("tags"), dict) else {}
+    return bool(types_from_tags(tags) or tags.get("historic") == "castle")
+
+
+def attach_nearby_amenities(records: list[CanonicalRecord], amenities: list[tuple[str, float, float]]) -> None:
+    from app.services.geo import haversine_km
+
+    if not amenities:
+        return
+    for record in records:
+        if record.latitude is None or record.longitude is None:
+            continue
+        extra: list[str] = list(record.amenities)
+        for kind, lat, lon in amenities:
+            km = haversine_km(record.latitude, record.longitude, lat, lon)
+            if km is None or km > 0.35:
+                continue
+            extra.append(kind)
+        record.amenities = list(dict.fromkeys(extra))
 
 
 def record_from_element(element: dict[str, Any], fetched_at: str) -> CanonicalRecord | None:
@@ -132,7 +260,7 @@ def record_from_element(element: dict[str, Any], fetched_at: str) -> CanonicalRe
         lang, title = wiki.split(":", 1)
         wikipedia_url = f"https://{lang}.wikipedia.org/wiki/{title.replace(' ', '_')}"
     website = tags.get("website") or tags.get("contact:website")
-    has_hours = bool(str(tags.get("opening_hours") or tags.get("opening_hours:signed") or "").strip())
+    hours = str(tags.get("opening_hours") or tags.get("opening_hours:signed") or "").strip() or None
     return CanonicalRecord(
         source_type=SOURCE_TYPE,
         external_id=osm_id,
@@ -146,7 +274,18 @@ def record_from_element(element: dict[str, Any], fetched_at: str) -> CanonicalRe
         official_website=website,
         wikipedia_url=wikipedia_url,
         visitability=visitability_from_tags(tags),
-        opening_hours_url=website if has_hours else None,
+        condition=condition_from_tags(tags),
+        opening_hours_url=website if hours else None,
+        osm_opening_hours=hours[:500] if hours else None,
+        phone=phone_from_tags(tags),
+        fee=str(tags.get("fee") or "").strip()[:40] or None,
+        wheelchair=str(tags.get("wheelchair") or "").strip()[:40] or None,
+        parking=parking_from_tags(tags),
+        visit_duration_minutes=duration_minutes_from_tags(tags),
+        last_entry=last_entry_from_tags(tags),
+        dogs=dogs_from_tags(tags),
+        payment=payment_from_tags(tags),
+        amenities=amenities_from_tags(tags),
         source_url=f"https://www.openstreetmap.org/{osm_id}",
         license=LICENSE,
         raw={"element": {"type": element.get("type"), "id": element.get("id"), "tags": tags}},
@@ -159,10 +298,18 @@ def records_from_overpass(payload: dict[str, Any], fetched_at: str) -> list[Cano
     if not isinstance(elements, list):
         raise ValueError("Neplatná Overpass odpověď")
     records: list[CanonicalRecord] = []
+    nearby: list[tuple[str, float, float]] = []
     for element in elements:
         if not isinstance(element, dict):
+            continue
+        tags = element.get("tags") if isinstance(element.get("tags"), dict) else {}
+        kind = amenity_kind(tags)
+        lat, lon = _coords(element)
+        if kind and lat is not None and lon is not None and not is_heritage_element(element):
+            nearby.append((kind, lat, lon))
             continue
         record = record_from_element(element, fetched_at)
         if record is not None:
             records.append(record)
+    attach_nearby_amenities(records, nearby)
     return records

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
 
 from app.config import REPO_ROOT, get_data_dir
 from app.db.models import now_iso

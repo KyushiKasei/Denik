@@ -5,7 +5,7 @@ function parseTimestamp(value: string | null | undefined): number | null {
   if (!value) {
     return null;
   }
-  const ms = Date.parse(value);
+  const ms = Date.parse(value.trim());
   return Number.isNaN(ms) ? null : ms;
 }
 
@@ -40,6 +40,7 @@ function visitEqual(local: StoredVisit, incoming: StoredVisit): boolean {
     local.rating === incoming.rating &&
     JSON.stringify(local.people) === JSON.stringify(incoming.people) &&
     (local.note ?? null) === (incoming.note ?? null) &&
+    (local.trip_id ?? null) === (incoming.trip_id ?? null) &&
     (local.deleted_at ?? null) === (incoming.deleted_at ?? null) &&
     local.created_at === incoming.created_at &&
     local.updated_at === incoming.updated_at

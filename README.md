@@ -4,16 +4,16 @@ Lokální katalog hradů, zámků a dalších historických míst v ČR + cestov
 
 - **PC** spravuje master data v SQLite (jediný zdroj pravdy katalogu).
 - **iPhone PWA** je HTML stránka: katalog jen čte, zapisuje návštěvy.
-- Mezi PC a mobilem není server ani REST API. Přenos je `catalog.json` a `diary.json` (Dropbox, USB, …).
+- Mezi PC a mobilem není cloud ani účty. Přenos je `catalog.json` a `diary.json` (Dropbox, USB), nebo volitelně domácí Wi-Fi na 15 minut.
 - Interní ID památky (`public_id`) se po vytvoření nikdy nemění.
 
 Plán: [PLAN.md](PLAN.md). Formáty souborů: [docs/JSON_FORMATS.md](docs/JSON_FORMATS.md). Importy: [docs/IMPORTS.md](docs/IMPORTS.md).
 
 ## Stav
 
-**MVP je hotové (Fáze 1–9).** Fáze 10: Poblíž na mapě (PC `/nearby`, PWA záložka Mapa).
+**MVP je hotové (Fáze 1–9).** Fáze 10: Poblíž na mapě. Fáze 11: čistota katalogu (jednotné zříceniny).
 
-Mimo MVP: automatický Dropbox, REST, účty, osobní fotky, výlety, gamifikace, offline mapy.
+Mimo MVP: automatický Dropbox, veřejné REST / cloud, účty, offline mapy.
 
 ## Start
 
@@ -31,6 +31,8 @@ Otevře se `http://127.0.0.1:8765`. Okno nenechávej zavřít, dokud aplikaci po
 |---|---|
 | `/` | přehled, export katalogu i deníku, import deníku |
 | `/places` | seznam, filtry, export `catalog.json` |
+| `/diary` | deník, pas, ročník |
+| `/trips` | výlety |
 | `/nearby` | mapa Poblíž (GPS / obec / souřadnice, šoupátko km) |
 | `/import` | Wikidata a další zdroje, review fronta |
 | `/backup` | ruční záloha a obnova SQLite |
@@ -63,7 +65,7 @@ Okruh bez serveru:
 
 1. Na PC importovat zdroje (`/import`) nebo založit místo ručně.
 2. Exportovat `catalog.json` (přehled nebo `/places`).
-3. V PWA na stránce Soubory nahrát `catalog.json`.
+3. V PWA na záložce Nastavení nahrát `catalog.json`.
 4. Zapsat návštěvy, exportovat `diary.json`.
 5. Na PC na přehledu importovat `diary.json`.
 6. Úprava katalogu na PC → nový `catalog.json` → v PWA nahradit jen místa. Návštěvy zůstanou; místo, které v katalogu zmizelo, se ukáže jako „místo už není v katalogu“.
@@ -80,6 +82,14 @@ CLI (z kořene projektu, s venv):
 Výchozí soubory: `%LOCALAPPDATA%\PamatkyDenik\export\catalog.json` a `diary.json`.
 
 Nevalidní JSON a neznámá `schema_version` se odmítnou. Stejný `diary.json` dvakrát nevytvoří duplicity. Deník nikdy nezakládá Place.
+
+## Domácí Wi-Fi (volitelné)
+
+Na přehledu PC lze na 15 minut zapnout domácí síť. Administrace zůstane na `127.0.0.1:8765`. Telefon v **Safari** (ne v nainstalované PWA) otevře `http://<IP-PC>:8766/lan`, zadá PIN z obrazovky PC, nahraje export deníku a stáhne sloučený `diary.zip` (volitelně `catalog.json`). V PWA se zip znovu importuje.
+
+- Windows firewall se při prvním zapnutí zeptá — povolte jen **soukromé** sítě.
+- Guest Wi-Fi s izolací klientů telefon k PC nepustí. Musí to být stejná privátní síť.
+- Výchozí stav je vypnuto. Po 15 minutách nebo tlačítkem Vypnout listener zmizí.
 
 ## Testy
 

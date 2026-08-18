@@ -75,6 +75,19 @@ export interface CatalogPlace {
   location: CatalogLocation;
   links: CatalogLinks;
   image: CatalogImage | null;
+  /** OSM opening_hours syntax. Chybí u starších catalog.json (schema 1 bez pole). */
+  osm_opening_hours?: string | null;
+  phone?: string | null;
+  fee?: string | null;
+  wheelchair?: string | null;
+  parking?: string | null;
+  visit_duration_minutes?: number | null;
+  last_entry?: string | null;
+  dogs?: string | null;
+  payment?: string | null;
+  amenities?: Array<"toilets" | "cafe" | "playground">;
+  inception_year?: number | null;
+  architectural_style?: string | null;
 }
 
 export interface Catalog {
@@ -102,6 +115,7 @@ export interface StoredVisit {
   rating: number | null;
   people: string[];
   note: string | null;
+  trip_id?: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;

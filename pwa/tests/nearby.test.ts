@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { clampRadiusKm, DEFAULT_RADIUS_KM, haversineKm, MAX_RADIUS_KM, MIN_RADIUS_KM } from "../src/geo/haversine";
-import { placesNearby } from "../src/geo/nearby";
+import { placesNearby, MAX_NEARBY_HITS, capNearbyHits } from "../src/geo/nearby";
 import { resolveOriginFromCatalog, suggestOrigins } from "../src/geo/origin";
 import type { CatalogPlace } from "../src/catalog/types";
 
@@ -118,4 +118,34 @@ test("origin from catalog name and municipality", () => {
   expect(resolveOriginFromCatalog([bouzov], "bouzov")?.latitude).toBe(49.704);
   expect(suggestOrigins([bouzov], "Bou").map((item) => item.label)).toEqual(["Bouzov"]);
   expect(suggestOrigins([bouzov], "Bo")).toEqual([]);
+});
+
+test("Praha padá na střed města, ne na první zámek v obci", () => {
+  const hlubocepy: CatalogPlace = {
+    ...prague,
+    id: "h",
+    name: "zámek Hlubočepy",
+    location: { ...prague.location, latitude: 50.04, longitude: 14.397, municipality: "Praha" },
+  };
+  const origin = resolveOriginFromCatalog([hlubocepy, prague], "Praha");
+  expect(origin?.label).toBe("Praha");
+  expect(origin?.source).toBe("municipality");
+  expect(origin?.latitude).toBeCloseTo(50.0875, 3);
+  expect(origin?.longitude).toBeCloseTo(14.4213, 3);
+  expect(suggestOrigins([hlubocepy], "Praha")[0]?.label).toBe("Praha");
+});
+
+test("nearby cap nechá nejbližší", () => {
+  const origin = { latitude: 49.704, longitude: 16.891 };
+  const many = Array.from({ length: MAX_NEARBY_HITS + 3 }, (_, index) => ({
+    ...bouzov,
+    id: String(index),
+    name: `Místo ${String(index).padStart(3, "0")}`,
+    location: { ...bouzov.location, longitude: 16.891 + index * 0.001 },
+  }));
+  const { hits, hitsTotal } = placesNearby(many, origin, 150, emptyFilters);
+  expect(hitsTotal).toBe(MAX_NEARBY_HITS + 3);
+  expect(hits).toHaveLength(MAX_NEARBY_HITS);
+  expect(hits[0]?.place.name).toBe("Místo 000");
+  expect(capNearbyHits([{ place: bouzov, km: 1 }]).hitsTotal).toBe(1);
 });

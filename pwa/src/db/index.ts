@@ -1,6 +1,6 @@
 import Dexie, { type Table } from "dexie";
 import type { CatalogPlace, MetaRecord, PlaceNameSnapshot, StoredPlaceState, StoredVisit } from "../catalog/types";
-import type { DiaryBackup, StoredTrip } from "../diary/types";
+import type { DiaryBackup, StoredTrip, StoredVisitPhoto } from "../diary/types";
 
 export class PamatkyDB extends Dexie {
   places!: Table<CatalogPlace, string>;
@@ -10,6 +10,7 @@ export class PamatkyDB extends Dexie {
   diary_backups!: Table<DiaryBackup, number>;
   place_snapshots!: Table<PlaceNameSnapshot, string>;
   trips!: Table<StoredTrip, string>;
+  visit_photos!: Table<StoredVisitPhoto, string>;
 
   constructor() {
     super("pamatkyDenik");
@@ -42,6 +43,9 @@ export class PamatkyDB extends Dexie {
       diary_backups: "++id, created_at",
       place_snapshots: "place_id",
       trips: "id",
+    });
+    this.version(5).stores({
+      visit_photos: "id, visit_id",
     });
   }
 }

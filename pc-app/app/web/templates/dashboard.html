@@ -7,49 +7,49 @@
 <h2>Kvalita katalogu</h2>
 <section class="stats-grid">
   <article class="stat-card">
-    <a href="/places">
+    <a href="/places?worth=all">
       <small>Aktivních míst</small>
       <strong>{{ stats.total_active }}</strong>
     </a>
   </article>
   <article class="stat-card">
-    <a href="/places?quality_status=VERIFIED">
+    <a href="/places?quality_status=VERIFIED&worth=all">
       <small>Ověřené</small>
       <strong>{{ stats.verified }}</strong>
     </a>
   </article>
   <article class="stat-card">
-    <a href="/places?quality_status=NEEDS_REVIEW">
+    <a href="/places?quality_status=NEEDS_REVIEW&worth=all">
       <small>K revizi</small>
       <strong>{{ stats.needs_review }}</strong>
     </a>
   </article>
   <article class="stat-card">
-    <a href="/places?missing_gps=1">
+    <a href="/places?missing_gps=1&worth=all">
       <small>Bez GPS</small>
       <strong>{{ stats.missing_gps }}</strong>
     </a>
   </article>
   <article class="stat-card">
-    <a href="/places?missing_type=1">
+    <a href="/places?missing_type=1&worth=all">
       <small>Bez typu</small>
       <strong>{{ stats.missing_type }}</strong>
     </a>
   </article>
   <article class="stat-card">
-    <a href="/places?archived=archived">
+    <a href="/places?archived=archived&worth=all">
       <small>Archiv</small>
       <strong>{{ stats.total_archived }}</strong>
     </a>
   </article>
   <article class="stat-card">
-    <a href="/places?quality_status=PROBABLE">
+    <a href="/places?quality_status=PROBABLE&worth=all">
       <small>Pravděpodobné</small>
       <strong>{{ stats.probable }}</strong>
     </a>
   </article>
   <article class="stat-card">
-    <a href="/places?quality_status=REJECTED">
+    <a href="/places?quality_status=REJECTED&worth=all">
       <small>Vyřazené</small>
       <strong>{{ stats.rejected }}</strong>
     </a>
@@ -58,6 +58,12 @@
 
 <h2>Deník</h2>
 <section class="stats-grid">
+  <article class="stat-card">
+    <a href="/diary">
+      <small>Pas</small>
+      <strong>{{ stats.unique_visited_places }}</strong>
+    </a>
+  </article>
   <article class="stat-card">
     <a href="/visits">
       <small>Počet návštěv</small>
@@ -80,6 +86,19 @@
     <a href="/places?journal=favorite">
       <small>Oblíbené</small>
       <strong>{{ stats.favorite }}</strong>
+    </a>
+  </article>
+</section>
+
+{% include "diary/_dashboard.html" %}
+
+<h2>Zříceniny</h2>
+<p class="muted">Typ nebo fyzický stav — stejný součet jako kolekce Zříceniny v PWA (Dnes).</p>
+<section class="stats-grid">
+  <article class="stat-card">
+    <a href="/places?ruin=1&amp;worth=all">
+      <small>Zříceniny (typ nebo stav)</small>
+      <strong>{{ stats.ruin_union }}</strong>
     </a>
   </article>
 </section>
@@ -125,12 +144,26 @@
   </form>
 </div>
 <form method="post" action="/diary/import" enctype="multipart/form-data">
-  <label>Importovat diary.json
-    <input type="file" name="file" accept="application/json,.json" required>
+  <label>Importovat diary.json nebo diary.zip
+    <input type="file" name="file" accept="application/json,.json,application/zip,.zip" required>
+  </label>
+  <label>
+    <input type="checkbox" name="family" value="1">
+    Rodinné sloučení (stejné místo a den = jedno razítko, lidé a poznámky se spojí)
   </label>
   <button type="submit">Importovat deník</button>
 </form>
+{% include "diary/_exchange.html" %}
+<div class="actions-row">
+  <form method="post" action="/export/open-folder">
+    <button type="submit" class="secondary">Otevřít složku exportu</button>
+  </form>
+  <button type="button" class="secondary" id="diary-save-folder" hidden>Uložit deník do složky…</button>
+</div>
+<p class="muted" id="diary-save-status" hidden></p>
 <p class="muted">Export se uloží i do <code>{{ diary_status.default_path }}</code>.</p>
+
+{% include "lan/_panel.html" %}
 
 {% if diary_issues %}
 <h3>Neznámá místa v deníku</h3>
@@ -198,6 +231,55 @@
         if (status) {
           status.hidden = false;
           status.textContent = "Uložení do složky selhalo. Použijte běžné stažení.";
+        }
+      }
+    });
+  })();
+  (function () {
+    var btn = document.getElementById("diary-save-folder");
+    var status = document.getElementById("diary-save-status");
+    if (!btn || !window.showSaveFilePicker) {
+      return;
+    }
+    btn.hidden = false;
+    btn.addEventListener("click", async function () {
+      if (status) {
+        status.hidden = true;
+        status.textContent = "";
+      }
+      var handle;
+      try {
+        handle = await window.showSaveFilePicker({
+          suggestedName: "diary.json",
+          types: [{ description: "JSON", accept: { "application/json": [".json"] } }],
+        });
+      } catch (err) {
+        if (err && err.name === "AbortError") {
+          return;
+        }
+        if (status) {
+          status.hidden = false;
+          status.textContent = "Složku se nepodařilo vybrat.";
+        }
+        return;
+      }
+      try {
+        var response = await fetch("/diary/export", { method: "POST" });
+        if (!response.ok) {
+          throw new Error("export");
+        }
+        var blob = await response.blob();
+        var writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        if (status) {
+          status.hidden = false;
+          status.textContent = "diary.json je uložený do vybrané složky.";
+        }
+      } catch (_err) {
+        if (status) {
+          status.hidden = false;
+          status.textContent = "Uložení deníku do složky selhalo.";
         }
       }
     });

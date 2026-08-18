@@ -1,13 +1,18 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import type { CatalogPlace, PlaceNameSnapshot } from "../catalog/types";
+import type { CatalogPlace, PlaceNameSnapshot, StoredVisit } from "../catalog/types";
 import { locationLine } from "../catalog/labels";
+import { HoursBadge } from "./HoursBadge";
 import { RouteLinks } from "./RouteLinks";
+import { TripExports } from "./TripExports";
+import { dateAtNoon, isClosedOnDate } from "../catalog/openingHours";
+import { completeTrip, tripStatusLabel } from "../diary/completeTrip";
 import { todayIsoDate } from "../diary/ids";
 import {
   createTrip,
   loadActiveTripId,
   loadTrips,
+  loadVisits,
   moveTripStop,
   removeStopFromTrip,
   saveActiveTripId,
@@ -15,8 +20,12 @@ import {
   updateTrip,
 } from "../diary/store";
 import { consecutiveStopKm, orderedStops, tripAirKm } from "../diary/tripPlan";
-import { formatVisitDate, resolvePlaceRef } from "../diary/timeline";
+import { defaultTripName, formatVisitDate, resolvePlaceRef } from "../diary/timeline";
 import type { StoredTrip } from "../diary/types";
+import { WeekendPlanner } from "./WeekendPlanner";
+import { TripMap } from "./TripMap";
+import { reorderPlaceIds } from "../diary/weekendPlan";
+import { useDiaryBadges } from "../diary/useDiaryBadges";
 
 export function TripPanel({
   placesById,
@@ -28,19 +37,64 @@ export function TripPanel({
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedId = searchParams.get("trip");
   const [trips, setTrips] = useState<StoredTrip[] | null>(null);
-  const [name, setName] = useState("Výlet");
+  const [name, setName] = useState(() => defaultTripName(todayIsoDate()));
   const [plannedOn, setPlannedOn] = useState(todayIsoDate());
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [visits, setVisits] = useState<StoredVisit[]>([]);
   const [activeId, setActiveId] = useState(loadActiveTripId());
+  const { wantIds } = useDiaryBadges();
+  const alive = useRef(true);
+  const busyLock = useRef(false);
 
-  const reload = async () => {
-    setTrips(await loadTrips());
+  const reload = async (allow = () => true) => {
+    const [nextTrips, nextVisits] = await Promise.all([loadTrips(), loadVisits()]);
+    if (!allow()) {
+      return;
+    }
+    setTrips(nextTrips);
+    setVisits(nextVisits);
     setActiveId(loadActiveTripId());
   };
 
   useEffect(() => {
-    void reload();
+    alive.current = true;
+    let cancelled = false;
+    void (async () => {
+      try {
+        await reload(() => !cancelled);
+      } catch {
+        if (!cancelled) {
+          setError("Výlety se nepodařilo načíst.");
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+      alive.current = false;
+    };
   }, []);
+
+  const runAction = async (fn: () => Promise<void>, fallback: string) => {
+    if (busyLock.current) {
+      return;
+    }
+    busyLock.current = true;
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+    } catch (err) {
+      if (alive.current) {
+        setError(err instanceof Error ? err.message : fallback);
+      }
+    } finally {
+      busyLock.current = false;
+      if (alive.current) {
+        setBusy(false);
+      }
+    }
+  };
 
   const selected = useMemo(
     () => trips?.find((trip) => trip.id === selectedId) ?? null,
@@ -60,6 +114,10 @@ export function TripPanel({
 
   const onCreate = async (event: FormEvent) => {
     event.preventDefault();
+    if (busy) {
+      return;
+    }
+    setBusy(true);
     setError(null);
     try {
       const trip = await createTrip({ name, planned_on: plannedOn || null });
@@ -68,10 +126,19 @@ export function TripPanel({
       openTrip(trip.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Výlet se nepodařilo založit.");
+    } finally {
+      setBusy(false);
     }
   };
 
   if (trips === null) {
+    if (error) {
+      return (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      );
+    }
     return <p className="muted">Načítám výlety…</p>;
   }
 
@@ -90,13 +157,24 @@ export function TripPanel({
         <p className="muted">
           {selected.planned_on ? formatVisitDate(selected.planned_on) : "bez data"}
           {totalKm != null ? ` · ${totalKm.toFixed(1)} km vzdušnou čarou` : ""}
+          {` · ${tripStatusLabel(selected.status)}`}
           {activeId === selected.id ? " · aktivní" : ""}
         </p>
         {selected.notes ? <p>{selected.notes}</p> : null}
-        <div className="actions-row">
+        {error ? (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        ) : null}
+        {stops.some((stop) => placesById.get(stop.place_id)?.location.latitude != null) ? (
+          <TripMap trip={selected} placesById={placesById} />
+        ) : null}
+        <TripExports trip={selected} placesById={placesById} />
+        <div className="actions-row print-only-hide">
           <button
             type="button"
             className="ghost"
+            disabled={busy}
             onClick={() => {
               saveActiveTripId(selected.id);
               setActiveId(selected.id);
@@ -107,13 +185,55 @@ export function TripPanel({
           <button
             type="button"
             className="ghost"
-            onClick={async () => {
-              if (!window.confirm("Smazat tento výlet? Záznam zůstane v deníku jako smazaný.")) {
-                return;
-              }
-              await softDeleteTrip(selected.id);
-              await reload();
-              openTrip(null);
+            disabled={busy}
+            onClick={() => {
+              void runAction(async () => {
+                await completeTrip(selected, placesById, visits, todayIsoDate());
+                await reload();
+              }, "Výlet se nepodařilo uzavřít.");
+            }}
+          >
+            {busy ? "Pracuji…" : "Uzavřít výlet"}
+          </button>
+          {stops.length >= 2 ? (
+            <button
+              type="button"
+              className="ghost"
+              disabled={busy}
+              onClick={() => {
+                void runAction(async () => {
+                  const ordered = reorderPlaceIds(
+                    stops.map((stop) => stop.place_id),
+                    placesById,
+                    selected.origin,
+                  );
+                  await updateTrip(selected.id, {
+                    stops: ordered.map((place_id, sort_order) => ({
+                      place_id,
+                      sort_order,
+                      note: stops.find((stop) => stop.place_id === place_id)?.note ?? null,
+                    })),
+                  });
+                  await reload();
+                }, "Pořadí se nepodařilo seřadit.");
+              }}
+            >
+              Seřadit podle vzdálenosti
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="ghost"
+            disabled={busy}
+            onClick={() => {
+              void runAction(async () => {
+                if (!window.confirm("Smazat tento výlet? Záznam zůstane v deníku jako smazaný.")) {
+                  return;
+                }
+                await softDeleteTrip(selected.id);
+                await reload();
+                openTrip(null);
+              }, "Výlet se nepodařilo smazat.");
             }}
           >
             Smazat výlet
@@ -127,15 +247,19 @@ export function TripPanel({
               const ref = resolvePlaceRef(stop.place_id, placesById, snapshotsById);
               const place = placesById.get(stop.place_id);
               const gap = gaps[index];
+              const when = selected.planned_on ? dateAtNoon(selected.planned_on) : new Date();
+              const closed = place ? isClosedOnDate(place, when) : false;
               return (
                 <li key={`${stop.place_id}-${stop.sort_order}`}>
                   <div className="place-row">
                     <span className="place-row-title">
                       {index + 1}. {ref.name}
+                      {place ? <HoursBadge place={place} at={when} /> : null}
                     </span>
                     <span className="place-row-meta">
                       {place ? locationLine(place) : ref.municipality || ""}
                       {ref.missingFromCatalog ? " · mimo katalog" : ""}
+                      {closed ? " · ten den zavřeno" : ""}
                     </span>
                     <div className="actions-row">
                       <Link to={`/place/${stop.place_id}?from=diary`} className="text-link">
@@ -144,10 +268,13 @@ export function TripPanel({
                       <button
                         type="button"
                         className="ghost"
-                        disabled={index === 0}
-                        onClick={async () => {
-                          await moveTripStop(selected.id, stop.place_id, -1);
-                          await reload();
+                        disabled={busy || index === 0}
+                        aria-label={`Posunout ${ref.name} nahoru`}
+                        onClick={() => {
+                          void runAction(async () => {
+                            await moveTripStop(selected.id, stop.place_id, -1);
+                            await reload();
+                          }, "Pořadí se nepodařilo změnit.");
                         }}
                       >
                         ↑
@@ -155,10 +282,13 @@ export function TripPanel({
                       <button
                         type="button"
                         className="ghost"
-                        disabled={index === stops.length - 1}
-                        onClick={async () => {
-                          await moveTripStop(selected.id, stop.place_id, 1);
-                          await reload();
+                        disabled={busy || index === stops.length - 1}
+                        aria-label={`Posunout ${ref.name} dolů`}
+                        onClick={() => {
+                          void runAction(async () => {
+                            await moveTripStop(selected.id, stop.place_id, 1);
+                            await reload();
+                          }, "Pořadí se nepodařilo změnit.");
                         }}
                       >
                         ↓
@@ -166,9 +296,12 @@ export function TripPanel({
                       <button
                         type="button"
                         className="ghost"
-                        onClick={async () => {
-                          await removeStopFromTrip(selected.id, stop.place_id);
-                          await reload();
+                        disabled={busy}
+                        onClick={() => {
+                          void runAction(async () => {
+                            await removeStopFromTrip(selected.id, stop.place_id);
+                            await reload();
+                          }, "Zastávku se nepodařilo odebrat.");
                         }}
                       >
                         Odebrat
@@ -206,7 +339,10 @@ export function TripPanel({
               if (value === (selected.notes ?? null)) {
                 return;
               }
-              void updateTrip(selected.id, { notes: value }).then(() => reload());
+              void runAction(async () => {
+                await updateTrip(selected.id, { notes: value });
+                await reload();
+              }, "Poznámku k výletu se nepodařilo uložit.");
             }}
           />
         </label>
@@ -225,13 +361,22 @@ export function TripPanel({
           Datum
           <input type="date" value={plannedOn} onChange={(event) => setPlannedOn(event.target.value)} />
         </label>
-        <button type="submit">Nový výlet</button>
+        <button type="submit" disabled={busy}>
+          {busy ? "Zakládám…" : "Nový výlet"}
+        </button>
       </form>
       {error ? (
         <p className="error" role="alert">
           {error}
         </p>
       ) : null}
+      <WeekendPlanner
+        places={[...placesById.values()]}
+        wantIds={wantIds}
+        onCreated={(id) => {
+          void reload().then(() => openTrip(id));
+        }}
+      />
       {trips.length === 0 ? (
         <p className="muted">Zatím žádný výlet. Založte ho tady, nebo přidejte místo z mapy.</p>
       ) : (
@@ -243,6 +388,7 @@ export function TripPanel({
                 <span className="place-row-meta">
                   {trip.planned_on ? formatVisitDate(trip.planned_on) : "bez data"}
                   {` · ${trip.stops.length} zastávek`}
+                  {` · ${tripStatusLabel(trip.status)}`}
                   {activeId === trip.id ? " · aktivní" : ""}
                 </span>
               </button>

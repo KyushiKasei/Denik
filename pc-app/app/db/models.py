@@ -56,6 +56,18 @@ class Place(Base):
     wikipedia_url: Mapped[str | None] = mapped_column(String(500))
     opening_hours_url: Mapped[str | None] = mapped_column(String(500))
     ticket_url: Mapped[str | None] = mapped_column(String(500))
+    osm_opening_hours: Mapped[str | None] = mapped_column(String(500))
+    phone: Mapped[str | None] = mapped_column(String(80))
+    fee: Mapped[str | None] = mapped_column(String(40))
+    wheelchair: Mapped[str | None] = mapped_column(String(40))
+    parking: Mapped[str | None] = mapped_column(String(80))
+    visit_duration_minutes: Mapped[int | None] = mapped_column(Integer)
+    last_entry: Mapped[str | None] = mapped_column(String(40))
+    dogs: Mapped[str | None] = mapped_column(String(40))
+    payment: Mapped[str | None] = mapped_column(String(40))
+    amenities: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
+    inception_year: Mapped[int | None] = mapped_column(Integer)
+    architectural_style: Mapped[str | None] = mapped_column(String(120))
     heritage_status: Mapped[str | None] = mapped_column(String(32))
     unesco: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     quality_status: Mapped[str] = mapped_column(String(32), nullable=False, default="NEEDS_REVIEW")
@@ -104,12 +116,30 @@ class Place(Base):
         return self.latitude is not None and self.longitude is not None
 
     @property
+    def primary_photo(self) -> PlacePhoto | None:
+        photos = list(self.photos)
+        if not photos:
+            return None
+        photos.sort(key=lambda item: (0 if item.is_primary else 1, item.id))
+        return photos[0]
+
+    @property
     def alt_names(self) -> list[str]:
         try:
             data = json.loads(self.alternative_names or "[]")
         except json.JSONDecodeError:
             return []
         return [str(item) for item in data] if isinstance(data, list) else []
+
+    @property
+    def amenity_codes(self) -> list[str]:
+        try:
+            data = json.loads(self.amenities or "[]")
+        except json.JSONDecodeError:
+            return []
+        if not isinstance(data, list):
+            return []
+        return [str(item) for item in data if item]
 
     @property
     def types_cs(self) -> str:
@@ -314,6 +344,7 @@ class Visit(Base):
     rating: Mapped[int | None] = mapped_column(Integer)
     people_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     note: Mapped[str | None] = mapped_column(Text)
+    trip_public_id: Mapped[str | None] = mapped_column(String(36), index=True)
     created_at: Mapped[str] = mapped_column(String(40), nullable=False, default=now_iso)
     updated_at: Mapped[str] = mapped_column(String(40), nullable=False, default=now_iso)
     deleted_at: Mapped[str | None] = mapped_column(String(40), index=True)
@@ -363,6 +394,7 @@ class Trip(Base):
     origin_longitude: Mapped[float | None] = mapped_column(Float)
     origin_label: Mapped[str | None] = mapped_column(String(200))
     notes: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="planned")
     created_at: Mapped[str] = mapped_column(String(40), nullable=False, default=now_iso)
     updated_at: Mapped[str] = mapped_column(String(40), nullable=False, default=now_iso)
     deleted_at: Mapped[str | None] = mapped_column(String(40), index=True)

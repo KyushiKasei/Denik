@@ -1,12 +1,16 @@
-import type { CatalogPlace, PlaceTypeCode, VisitabilityCode } from "./types";
-import { hasGps, HERITAGE_OPTIONS, VISITABILITY_FILTER_GROUPS, visitabilityMatches } from "./labels";
+import type { CatalogPlace, ConditionCode, PlaceTypeCode, VisitabilityCode } from "./types";
+import { CONDITION_OPTIONS, hasGps, HERITAGE_OPTIONS, PLACE_TYPE_OPTIONS, VISITABILITY_FILTER_GROUPS, VISITABILITY_OPTIONS, visitabilityMatches } from "./labels";
 import { appliedSearchQuery, fold } from "../text/fold";
+import { isInOpenSeason, isSeasonallyLikelyClosed, parseHoursParam, parseOpenMonthParam, placeOpenState, type HoursFilter } from "./openingHours";
+import { isWorthVisiting, loadWorthFilter, parseWorthParam, visitScore } from "./visitWorth";
+import { parseExtraParam, placeMatchesExtra, type PlaceExtraFilter } from "./moods";
+import { isRuin, placeMatchesType } from "./ruins";
 
 export type VisitabilityFilter = VisitabilityCode | "PUBLIC" | "NOT_PUBLIC" | "";
 export type JournalFilter = "" | "visited" | "not_visited" | "want_to_visit" | "favorite";
 export type UnescoFilter = "" | "yes" | "no";
 export type GpsFilter = "" | "with" | "without";
-export type PlaceSort = "name" | "name_desc" | "region";
+export type PlaceSort = "name" | "name_desc" | "region" | "worth";
 
 export interface PlaceFilters {
   query: string;
@@ -17,8 +21,15 @@ export interface PlaceFilters {
   journal: JournalFilter;
   unesco?: UnescoFilter;
   heritage?: string;
+  condition?: ConditionCode | "";
   gps?: GpsFilter;
+  worth?: boolean;
   sort?: PlaceSort;
+  hours?: HoursFilter;
+  openMonth?: number | "";
+  extra?: PlaceExtraFilter;
+  lost?: boolean;
+  style?: string;
 }
 
 export const EMPTY_FILTERS: PlaceFilters = {
@@ -30,14 +41,22 @@ export const EMPTY_FILTERS: PlaceFilters = {
   journal: "",
   unesco: "",
   heritage: "",
+  condition: "",
   gps: "",
+  worth: true,
   sort: "name",
+  hours: "",
+  openMonth: "",
+  extra: "",
+  lost: false,
+  style: "",
 };
 
 export const PLACE_SORT_OPTIONS: Array<{ code: PlaceSort; name_cs: string }> = [
   { code: "name", name_cs: "Název A–Z" },
   { code: "name_desc", name_cs: "Název Z–A" },
   { code: "region", name_cs: "Kraj" },
+  { code: "worth", name_cs: "Zajímavost" },
 ];
 
 const haystackCache = new WeakMap<CatalogPlace, string>();
@@ -76,7 +95,7 @@ export function primeHaystacks(places: CatalogPlace[]): void {
 }
 
 export function parseSortParam(raw: string | null): PlaceSort {
-  if (raw === "name_desc" || raw === "region") {
+  if (raw === "name_desc" || raw === "region" || raw === "worth") {
     return raw;
   }
   return "name";
@@ -95,14 +114,45 @@ function sortPlaces(places: CatalogPlace[], sort: PlaceSort): CatalogPlace[] {
     );
     return copy;
   }
+  if (sort === "worth") {
+    copy.sort((a, b) => visitScore(b) - visitScore(a) || a.name.localeCompare(b.name, "cs"));
+    return copy;
+  }
   copy.sort((a, b) => a.name.localeCompare(b.name, "cs"));
   return copy;
 }
 
 export function uniqueSorted(values: Array<string | null | undefined>): string[] {
-  return [...new Set(values.filter((value): value is string => Boolean(value)))].sort((a, b) =>
-    a.localeCompare(b, "cs"),
-  );
+  const set = new Set<string>();
+  for (const value of values) {
+    if (!value) {
+      continue;
+    }
+    for (const part of splitLocationParts(value)) {
+      set.add(part);
+    }
+  }
+  return [...set].sort((a, b) => a.localeCompare(b, "cs"));
+}
+
+export function splitLocationParts(raw: string): string[] {
+  return raw
+    .split(/[;,]/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+export function locationFieldMatches(raw: string | null | undefined, selected: string): boolean {
+  if (!selected) {
+    return true;
+  }
+  if (!raw) {
+    return false;
+  }
+  if (raw === selected) {
+    return true;
+  }
+  return splitLocationParts(raw).includes(selected);
 }
 
 export function parseJournalParam(raw: string | null): JournalFilter {
@@ -124,6 +174,47 @@ export function parseHeritageParam(raw: string | null): string {
   return HERITAGE_OPTIONS.some((item) => item.code === raw) ? raw : "";
 }
 
+export { parseHoursParam, parseOpenMonthParam, parseExtraParam };
+
+export function parseConditionParam(raw: string | null): ConditionCode | "" {
+  if (!raw) {
+    return "";
+  }
+  return CONDITION_OPTIONS.some((item) => item.code === raw) ? (raw as ConditionCode) : "";
+}
+
+function knownVisitability(value: string): value is Exclude<VisitabilityFilter, ""> {
+  return (
+    VISITABILITY_FILTER_GROUPS.some((item) => item.code === value) ||
+    VISITABILITY_OPTIONS.some((item) => item.code === value)
+  );
+}
+
+export function filtersFromParams(params: URLSearchParams): PlaceFilters {
+  const type = params.get("type") ?? "";
+  const known = PLACE_TYPE_OPTIONS.some((item) => item.code === type);
+  const visitabilityRaw = params.get("visitability") ?? "";
+  return {
+    query: params.get("q") ?? "",
+    type: known ? (type as PlaceTypeCode) : "",
+    region: params.get("region") ?? "",
+    district: params.get("district") ?? "",
+    visitability: knownVisitability(visitabilityRaw) ? visitabilityRaw : "",
+    journal: parseJournalParam(params.get("journal")),
+    unesco: parseUnescoParam(params.get("unesco")),
+    heritage: parseHeritageParam(params.get("heritage")),
+    condition: parseConditionParam(params.get("condition")),
+    gps: parseGpsParam(params.get("gps")),
+    worth: parseWorthParam(params.get("worth")) ?? loadWorthFilter(),
+    sort: parseSortParam(params.get("sort")),
+    hours: parseHoursParam(params.get("hours")),
+    openMonth: parseOpenMonthParam(params.get("month")),
+    extra: parseExtraParam(params.get("extra")),
+    lost: params.get("lost") === "yes",
+    style: params.get("style") ?? "",
+  };
+}
+
 export function filterPlaces(
   places: CatalogPlace[],
   filters: PlaceFilters,
@@ -131,13 +222,13 @@ export function filterPlaces(
 ): CatalogPlace[] {
   const needle = fold(appliedSearchQuery(filters.query));
   const matched = places.filter((place) => {
-      if (filters.type && !place.types.includes(filters.type)) {
+      if (filters.type && !placeMatchesType(place, filters.type)) {
         return false;
       }
       if (filters.region && place.location.region !== filters.region) {
         return false;
       }
-      if (filters.district && place.location.district !== filters.district) {
+      if (filters.district && !locationFieldMatches(place.location.district, filters.district)) {
         return false;
       }
       if (filters.visitability && !visitabilityMatches(place.visitability, filters.visitability)) {
@@ -152,10 +243,37 @@ export function filterPlaces(
       if (filters.heritage && place.heritage_status !== filters.heritage) {
         return false;
       }
+      if (filters.condition && place.condition !== filters.condition) {
+        return false;
+      }
+      if (filters.worth && !filters.lost && !isWorthVisiting(place)) {
+        return false;
+      }
       if (filters.gps === "with" && !hasGps(place)) {
         return false;
       }
       if (filters.gps === "without" && hasGps(place)) {
+        return false;
+      }
+      if (filters.hours === "open" && placeOpenState(place) !== "open") {
+        return false;
+      }
+      if (filters.hours === "season" && !isInOpenSeason(place)) {
+        return false;
+      }
+      if (filters.openMonth) {
+        const at = new Date(new Date().getFullYear(), filters.openMonth - 1, 15, 12, 0, 0);
+        if (isSeasonallyLikelyClosed(place, at)) {
+          return false;
+        }
+      }
+      if (filters.extra && !placeMatchesExtra(place, filters.extra)) {
+        return false;
+      }
+      if (filters.lost && place.condition !== "EXTINCT" && place.condition !== "REMAINS") {
+        return false;
+      }
+      if (filters.style && (place.architectural_style || "") !== filters.style) {
         return false;
       }
       if (filters.journal === "visited" && !diary?.visitedIds.has(place.id)) {
@@ -197,7 +315,12 @@ export interface FacetCounts {
   journal: Record<string, number>;
   unesco: Record<string, number>;
   heritage: Record<string, number>;
+  condition: Record<string, number>;
   gps: Record<string, number>;
+  worth: { visit: number; all: number };
+  hours: Record<string, number>;
+  extra: Record<string, number>;
+  lost: { yes: number; all: number };
 }
 
 export function facetCounts(
@@ -220,6 +343,9 @@ export function facetCounts(
     for (const code of place.types) {
       bump(types, code);
     }
+    if (isRuin(place) && !place.types.includes("RUIN")) {
+      bump(types, "RUIN");
+    }
   }
 
   const regionBase = filterPlaces(places, { ...filters, region: "" }, diary);
@@ -231,7 +357,13 @@ export function facetCounts(
   const districtBase = filterPlaces(places, { ...filters, district: "" }, diary);
   const districts: Record<string, number> = { "": districtBase.length };
   for (const place of districtBase) {
-    bump(districts, place.location.district);
+    const parts = splitLocationParts(place.location.district ?? "");
+    if (parts.length === 0) {
+      continue;
+    }
+    for (const part of parts) {
+      bump(districts, part);
+    }
   }
 
   const journalBase = filterPlaces(places, { ...filters, journal: "" }, diary);
@@ -263,5 +395,40 @@ export function facetCounts(
     without: gpsBase.filter((place) => !hasGps(place)).length,
   };
 
-  return { visitability, types, regions, districts, journal, unesco, heritage, gps };
+  const conditionBase = filterPlaces(places, { ...filters, condition: "" }, diary);
+  const condition: Record<string, number> = { "": conditionBase.length };
+  for (const place of conditionBase) {
+    bump(condition, place.condition);
+  }
+
+  const worthBase = filterPlaces(places, { ...filters, worth: false }, diary);
+  const worth = {
+    all: worthBase.length,
+    visit: worthBase.filter(isWorthVisiting).length,
+  };
+
+  const hoursBase = filterPlaces(places, { ...filters, hours: "" }, diary);
+  const hours: Record<string, number> = {
+    "": hoursBase.length,
+    open: filterPlaces(places, { ...filters, hours: "open" }, diary).length,
+    season: filterPlaces(places, { ...filters, hours: "season" }, diary).length,
+  };
+
+  const extraBase = filterPlaces(places, { ...filters, extra: "" }, diary);
+  const extra: Record<string, number> = {
+    "": extraBase.length,
+    dogs: filterPlaces(places, { ...filters, extra: "dogs" }, diary).length,
+    free: filterPlaces(places, { ...filters, extra: "free" }, diary).length,
+    toilets: filterPlaces(places, { ...filters, extra: "toilets" }, diary).length,
+    cafe: filterPlaces(places, { ...filters, extra: "cafe" }, diary).length,
+    playground: filterPlaces(places, { ...filters, extra: "playground" }, diary).length,
+  };
+
+  const lostBase = filterPlaces(places, { ...filters, lost: false, worth: false }, diary);
+  const lost = {
+    all: lostBase.length,
+    yes: lostBase.filter((place) => place.condition === "EXTINCT" || place.condition === "REMAINS").length,
+  };
+
+  return { visitability, types, regions, districts, journal, unesco, heritage, condition, gps, worth, hours, extra, lost };
 }

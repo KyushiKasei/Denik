@@ -129,6 +129,14 @@
       ]
     }
   },
+  "PALACE": {
+    "head": {
+      "vars": ["item", "itemLabel", "coord", "image", "web", "uskp", "article", "obecLabel", "okresLabel", "krajLabel"]
+    },
+    "results": {
+      "bindings": []
+    }
+  },
   "LOOKOUT_TOWER": {
     "head": {
       "vars": ["item", "itemLabel", "coord", "image", "web", "uskp", "article", "obecLabel", "okresLabel", "krajLabel"]

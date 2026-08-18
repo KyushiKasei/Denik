@@ -89,9 +89,15 @@ def reset_job_state() -> None:
     _end_job()
 
 
-def load_source_records(session: Session, source_type: str, *, use_cache: bool):
+def load_source_records(
+    session: Session,
+    source_type: str,
+    *,
+    use_cache: bool,
+    public_ids: list[str] | None = None,
+):
     if source_type == "wikidata":
-        return fetch_wikidata_records(use_cache=use_cache)
+        return fetch_wikidata_records(use_cache=use_cache, session=session)
     if source_type == "pamatkovy_katalog":
         return fetch_pamatkovy_katalog_records(
             use_cache=use_cache,
@@ -118,7 +124,7 @@ def load_source_records(session: Session, source_type: str, *, use_cache: bool):
     if source_type == "osm":
         return fetch_osm_records(use_cache=use_cache)
     if source_type == "official_web":
-        return fetch_official_web_records(session, use_cache=use_cache)
+        return fetch_official_web_records(session, use_cache=use_cache, public_ids=public_ids)
     raise ValueError(f"Neznámý zdroj importu: {source_type}")
 
 
@@ -162,7 +168,7 @@ def run_fixture_preview(path: str) -> None:
         _end_job()
 
 
-def run_named_preview(source_type: str, *, use_cache: bool) -> None:
+def run_named_preview(source_type: str, *, use_cache: bool, public_ids: list[str] | None = None) -> None:
     session = get_session()
     label, apply_action = SOURCE_META.get(source_type, (source_type, "/import"))
     try:
@@ -173,7 +179,7 @@ def run_named_preview(source_type: str, *, use_cache: bool) -> None:
             message="Stahuji zdroj…",
             force=True,
         )
-        records = load_source_records(session, source_type, use_cache=use_cache)
+        records = load_source_records(session, source_type, use_cache=use_cache, public_ids=public_ids)
         write_progress(
             phase="match",
             total=len(records),
@@ -187,10 +193,13 @@ def run_named_preview(source_type: str, *, use_cache: bool) -> None:
             source_type,
             extra_log=_extra_log(source_type, records),
         )
+        hidden = {"use_cache": "1"}
+        if public_ids:
+            hidden["public_ids"] = "\n".join(public_ids)
         save_preview_page(
             source_label=label,
             apply_action=apply_action,
-            apply_hidden={"use_cache": "1"},
+            apply_hidden=hidden,
             without_gps=_without_gps(records),
             result=result,
         )
@@ -232,7 +241,7 @@ def run_fixture_apply(path: str) -> None:
         _end_job()
 
 
-def run_named_apply(source_type: str, *, use_cache: bool) -> None:
+def run_named_apply(source_type: str, *, use_cache: bool, public_ids: list[str] | None = None) -> None:
     session = get_session()
     try:
         write_progress(
@@ -241,7 +250,7 @@ def run_named_apply(source_type: str, *, use_cache: bool) -> None:
             message="Stahuji zdroj…",
             force=True,
         )
-        records = load_source_records(session, source_type, use_cache=use_cache)
+        records = load_source_records(session, source_type, use_cache=use_cache, public_ids=public_ids)
         write_progress(
             phase="write",
             total=len(records),

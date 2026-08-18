@@ -21,7 +21,7 @@ Platný cílový model je v [PLAN.md](../PLAN.md) kapitole 6. Tady je to, co už
 
 ## places
 
-Master záznam památky. `public_id` je neměnný UUIDv7. Integer `id` se do JSON nikdy nedostane.
+Master záznam památky. `public_id` je neměnný UUIDv7. Integer `id` se do JSON nikdy nedostane. `osm_opening_hours` je volitelný OSM řetězec (ODbL), v `catalog.json` stejnojmenné pole. Volitelně i `dogs`, `payment`, `amenities` (JSON seznam `toilets` / `cafe` / `playground`), `inception_year` a `architectural_style`.
 
 M:N na typy přes `place_place_types`. Řádky se nemažou — archivace nastaví `archived_at`.
 
@@ -53,7 +53,7 @@ Klíče `catalog_version`, `last_catalog_export_at`, `last_catalog_content_hash`
 - `trips` + `trip_stops` — výlet má vlastní `public_id` (UUIDv7). Zastávka drží `place_public_id` a volitelné FK `place_id`. Neznámé UUID zastávku nesmaže a Place nezaloží. Soft-delete výletu přes `deleted_at`.
 - `diary_import_issues` — neznámé `place_id` z importu deníku. Návštěva i zastávka výletu se uloží, Place se nezakládá.
 
-Import `diary.json` slučuje podle kapitoly 10 v PLAN.md (last-write-wins podle `updated_at`). Katalogový import deníkové tabulky nemění. Archivace Place návštěvy ani výlety nemaže. Sloučení dvou Place převede návštěvy i zastávky výletů na vítěze, `Visit.public_id` a `Trip.public_id` se nemění. PC umí návštěvy i osobní stav zapisovat na detailu místa a výlety na `/trips` (stejná pole jako PWA); `public_id` návštěvy i výletu je nový UUIDv7, neodvozuje se z místa.
+Import `diary.json` slučuje podle kapitoly 10 v PLAN.md (last-write-wins podle `updated_at`). Zaškrtnuté **rodinné sloučení** po importu spojí živé návštěvy se stejným `place_id` a dnem (`visited_at`): lidé a poznámky se sjednotí, zůstane vyšší hodnocení, fotky se přesunou na vítěze. Katalogový import deníkové tabulky nemění. Archivace Place návštěvy ani výlety nemaže. Sloučení dvou Place převede návštěvy i zastávky výletů na vítěze, `Visit.public_id` a `Trip.public_id` se nemění. PC umí návštěvy i osobní stav zapisovat na detailu místa a výlety na `/trips` (stejná pole jako PWA); `public_id` návštěvy i výletu je nový UUIDv7, neodvozuje se z místa.
 
 Kontrakt: `shared/schemas/diary.schema.json` (`schema_version` 1 i 2). Sample: `fixtures/diary.sample.json` (verze 1, bez `trips`). Export po této fázi je vždy verze 2 s polem `trips`.
 

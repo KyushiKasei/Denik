@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from app.services.source_urls import identity_source_url, is_http_url, source_page_url
+from app.services.source_urls import identity_source_url, is_http_url, photo_display_url, source_page_url
 
 
 def test_identity_urls() -> None:
@@ -28,3 +28,15 @@ def test_is_http_url() -> None:
     assert is_http_url("https://cs.wikipedia.org/wiki/X")
     assert not is_http_url("['MANOR']")
     assert not is_http_url(None)
+
+
+def test_photo_display_url_prefers_thumbnail() -> None:
+    photo = SimpleNamespace(
+        thumbnail_url="https://commons.wikimedia.org/wiki/Special:FilePath/X.jpg?width=640",
+        original_url="https://commons.wikimedia.org/wiki/File:X.jpg",
+        source_url="https://commons.wikimedia.org/wiki/File:X.jpg",
+    )
+    assert photo_display_url(photo) == photo.thumbnail_url
+    assert photo_display_url(None) is None
+    missing = SimpleNamespace(thumbnail_url=None, original_url=None, source_url="javascript:alert(1)")
+    assert photo_display_url(missing) is None

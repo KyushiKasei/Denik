@@ -16,6 +16,7 @@ from app.services.trips import (
     add_stop,
     consecutive_stop_km,
     create_trip,
+    default_trip_name,
     get_trip,
     list_trips,
     move_stop,
@@ -48,7 +49,7 @@ def trips_page(request: Request, session: Session = Depends(db_session)) -> HTML
         {
             "trips": list_trips(session),
             "notice": _notice(request),
-            "form_name": "Výlet",
+            "form_name": default_trip_name(),
             "form_planned_on": "",
             "errors": {},
         },
@@ -69,7 +70,7 @@ async def trips_create(request: Request, session: Session = Depends(db_session))
             {
                 "trips": list_trips(session),
                 "notice": None,
-                "form_name": name or "Výlet",
+                "form_name": name or default_trip_name(),
                 "form_planned_on": planned_on,
                 "errors": {"form": str(exc)},
             },

@@ -25,7 +25,9 @@ from app.db.enums import (
 from app.db.models import Place, PlaceJournalState, PlacePlaceType, PlaceSource, PlaceType, Visit, now_iso
 from app.logging_setup import get_logger
 from app.services.overrides import has_override, record_manual_edits, snapshot_place
+from app.services.ruins import is_ruin_clause, ruin_union_count
 from app.services.source_urls import is_http_url
+from app.services.visit_worth import parse_worth_param, worth_visiting_clause
 
 PAGE_SIZE = 50
 SORT_CHOICES = {
@@ -116,6 +118,18 @@ class PlaceInput:
     wikipedia_url: str | None = None
     opening_hours_url: str | None = None
     ticket_url: str | None = None
+    osm_opening_hours: str | None = None
+    phone: str | None = None
+    fee: str | None = None
+    wheelchair: str | None = None
+    parking: str | None = None
+    visit_duration_minutes: int | None = None
+    last_entry: str | None = None
+    dogs: str | None = None
+    payment: str | None = None
+    amenities: list[str] = field(default_factory=list)
+    inception_year: int | None = None
+    architectural_style: str | None = None
     errors: dict[str, str] = field(default_factory=dict)
 
     @classmethod
@@ -159,6 +173,58 @@ class PlaceInput:
             setattr(data, field_name, value)
             if err:
                 data.errors[field_name] = err
+        hours = _blank_to_none(form.get("osm_opening_hours"))
+        if hours and len(hours) > 500:
+            data.errors["osm_opening_hours"] = "Nejvýš 500 znaků."
+        else:
+            data.osm_opening_hours = hours
+        phone = _blank_to_none(form.get("phone"))
+        if phone and len(phone) > 80:
+            data.errors["phone"] = "Nejvýš 80 znaků."
+        else:
+            data.phone = phone
+        for field_name, limit in (
+            ("fee", 40),
+            ("wheelchair", 40),
+            ("parking", 80),
+            ("last_entry", 40),
+            ("dogs", 40),
+            ("payment", 40),
+            ("architectural_style", 120),
+        ):
+            value = _blank_to_none(form.get(field_name))
+            if value and len(value) > limit:
+                data.errors[field_name] = f"Nejvýš {limit} znaků."
+            else:
+                setattr(data, field_name, value)
+        allowed_amenities = {"toilets", "cafe", "playground"}
+        data.amenities = [
+            str(code)
+            for code in form.getlist("amenities")
+            if str(code).strip() in allowed_amenities
+        ]
+        year_raw = _blank_to_none(form.get("inception_year"))
+        if year_raw:
+            try:
+                year = int(year_raw)
+            except ValueError:
+                data.errors["inception_year"] = "Rok musí být číslo."
+            else:
+                if 100 <= year <= 2100:
+                    data.inception_year = year
+                else:
+                    data.errors["inception_year"] = "Rok 100–2100."
+        duration_raw = _blank_to_none(form.get("visit_duration_minutes"))
+        if duration_raw:
+            try:
+                duration = int(duration_raw)
+            except ValueError:
+                data.errors["visit_duration_minutes"] = "Zadejte minuty jako celé číslo."
+            else:
+                if not 1 <= duration <= 1440:
+                    data.errors["visit_duration_minutes"] = "Délka musí být 1–1440 minut."
+                else:
+                    data.visit_duration_minutes = duration
         return data
 
     @classmethod
@@ -188,6 +254,18 @@ class PlaceInput:
             wikipedia_url=place.wikipedia_url,
             opening_hours_url=place.opening_hours_url,
             ticket_url=place.ticket_url,
+            osm_opening_hours=place.osm_opening_hours,
+            phone=place.phone,
+            fee=place.fee,
+            wheelchair=place.wheelchair,
+            parking=place.parking,
+            visit_duration_minutes=place.visit_duration_minutes,
+            last_entry=place.last_entry,
+            dogs=place.dogs,
+            payment=place.payment,
+            amenities=place.amenity_codes,
+            inception_year=place.inception_year,
+            architectural_style=place.architectural_style,
         )
 
     def alternative_names_text(self) -> str:
@@ -229,6 +307,8 @@ class PlaceFilters:
     journal: str = ""
     archived: str = "active"
     sort: str = "name"
+    worth: bool = True
+    ruin_union: bool = False
     page: int = 1
 
     @classmethod
@@ -246,6 +326,7 @@ class PlaceFilters:
         journal = (params.get("journal") or "").strip()
         if journal not in {"visited", "not_visited", "want_to_visit", "favorite"}:
             journal = ""
+        parsed_worth = parse_worth_param(params.get("worth"))
         return cls(
             q=(params.get("q") or "").strip(),
             type_code=(params.get("type") or "").strip(),
@@ -260,6 +341,8 @@ class PlaceFilters:
             journal=journal,
             archived=archived,
             sort=sort,
+            worth=True if parsed_worth is None else parsed_worth,
+            ruin_union=params.get("ruin") in {"1", "on", "true", "yes"},
             page=max(page, 1),
         )
 
@@ -291,6 +374,10 @@ class PlaceFilters:
             pairs.append(("archived", self.archived))
         if self.sort != "name":
             pairs.append(("sort", self.sort))
+        if not self.worth:
+            pairs.append(("worth", "all"))
+        if self.ruin_union:
+            pairs.append(("ruin", "1"))
         shown_page = self.page if page is None else page
         if shown_page > 1:
             pairs.append(("page", str(shown_page)))
@@ -333,6 +420,8 @@ class PlaceFilters:
             or self.journal
             or self.archived != "active"
             or self.sort != "name"
+            or not self.worth
+            or self.ruin_union
         )
 
     def excluding(self, **cleared: Any) -> PlaceFilters:
@@ -385,6 +474,8 @@ def _apply_filters(stmt, filters: PlaceFilters):
                 .where(PlaceType.code == filters.type_code)
             )
         )
+    if filters.ruin_union:
+        stmt = stmt.where(is_ruin_clause())
     if filters.region:
         stmt = stmt.where(Place.region == filters.region)
     if filters.district:
@@ -443,6 +534,8 @@ def _apply_filters(stmt, filters: PlaceFilters):
                 )
             )
         )
+    if filters.worth:
+        stmt = stmt.where(worth_visiting_clause())
     return stmt
 
 
@@ -502,6 +595,7 @@ class FilterFacetCounts:
     quality: dict[str, int]
     journal: dict[str, int]
     archived: dict[str, int]
+    worth: dict[str, int]
 
 
 def filter_facet_counts(session: Session, filters: PlaceFilters) -> FilterFacetCounts:
@@ -555,6 +649,12 @@ def filter_facet_counts(session: Session, filters: PlaceFilters) -> FilterFacetC
     quality = _count_by_column(session, quality_base, Place.quality_status)
     quality[""] = _count_places(session, quality_base)
 
+    worth_base = filters.excluding(worth=False)
+    worth = {
+        "all": _count_places(session, worth_base),
+        "visit": _count_places(session, replace(worth_base, worth=True)),
+    }
+
     return FilterFacetCounts(
         visitability=visitability,
         types=types,
@@ -565,6 +665,7 @@ def filter_facet_counts(session: Session, filters: PlaceFilters) -> FilterFacetC
         quality=quality,
         journal=journal,
         archived=archived,
+        worth=worth,
     )
 
 
@@ -622,6 +723,18 @@ def _apply_input(place: Place, data: PlaceInput, session: Session) -> None:
     place.wikipedia_url = data.wikipedia_url
     place.opening_hours_url = data.opening_hours_url
     place.ticket_url = data.ticket_url
+    place.osm_opening_hours = data.osm_opening_hours
+    place.phone = data.phone
+    place.fee = data.fee
+    place.wheelchair = data.wheelchair
+    place.parking = data.parking
+    place.visit_duration_minutes = data.visit_duration_minutes
+    place.last_entry = data.last_entry
+    place.dogs = data.dogs
+    place.payment = data.payment
+    place.amenities = dump_alternative_names(list(dict.fromkeys(data.amenities)))
+    place.inception_year = data.inception_year
+    place.architectural_style = data.architectural_style
     place.types = _types_for_codes(session, data.type_codes)
     place.updated_at = now_iso()
 
@@ -678,18 +791,12 @@ def restore_place(session: Session, place: Place) -> Place:
 
 def mark_ruins_free_access(session: Session) -> int:
     """Zříceniny jdou navštívit bez otevírací doby. Ruční override se nepřepisuje."""
-    ruin_type = exists(
-        select(1)
-        .select_from(PlacePlaceType)
-        .join(PlaceType, PlaceType.id == PlacePlaceType.place_type_id)
-        .where(PlacePlaceType.place_id == Place.id, PlaceType.code == "RUIN")
-    )
     places = list(
         session.scalars(
             select(Place).where(
                 Place.visitability == "UNKNOWN",
                 Place.condition != "EXTINCT",
-                or_(Place.condition == "RUIN", ruin_type),
+                is_ruin_clause(),
             )
         ).all()
     )
@@ -729,6 +836,7 @@ class DashboardStats:
     rejected: int
     want_to_visit: int
     favorite: int
+    ruin_union: int
     by_type: list[TypeStat]
 
 
@@ -809,6 +917,7 @@ def dashboard_stats(session: Session) -> DashboardStats:
         rejected=rejected,
         want_to_visit=want_to_visit,
         favorite=favorite,
+        ruin_union=ruin_union_count(session),
         by_type=by_type,
     )
 

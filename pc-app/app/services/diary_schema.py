@@ -13,6 +13,7 @@ from app.config import diary_schema_path
 
 SCHEMA_VERSION = 2
 SUPPORTED_SCHEMA_VERSIONS = {1, 2}
+MAX_DIARY_JSON_BYTES = 20 * 1024 * 1024
 
 
 class DiarySchemaError(ValueError):
@@ -72,6 +73,12 @@ def validate_diary(data: Any) -> None:
 
 
 def load_and_validate_diary(path: Path) -> dict[str, Any]:
+    try:
+        size = path.stat().st_size
+    except OSError as exc:
+        raise DiarySchemaError(f"Soubor se nepodařilo přečíst: {exc}") from exc
+    if size > MAX_DIARY_JSON_BYTES:
+        raise DiarySchemaError("diary.json je moc velký.")
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:

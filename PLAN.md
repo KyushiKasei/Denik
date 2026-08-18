@@ -3,7 +3,7 @@
 Stav: rozhodnutí uzavřena. Fáze 1–9 (MVP) jsou hotové. Fáze 10 (Poblíž na mapě) je hotová.
 
 Závazný funkční dokument: `_Zadani/ZADANI_AI_PROGRAMATOR_PAMATKY.md`.
-Tento plán ho nerozšiřuje o server, REST mezi PC a mobilem, účty ani automatickou cloud synchronizaci.
+Tento plán ho nerozšiřuje o cloud, účty ani veřejné REST API mezi PC a mobilem. Volitelná domácí relace na LAN (PIN, 15 min, výchozí vypnuto) je jen doprava stejných souborů, ne druhý zdroj pravdy.
 
 ---
 
@@ -34,6 +34,8 @@ Tyto body se nemění bez tvého souhlasu:
 7. Opakovaný import nesmí vytvářet duplicity.
 8. Při nejisté shodě se má vyžádat ruční rozhodnutí, ne riskantní automatické sloučení.
 9. Aktualizace katalogu nikdy nesmí poškodit osobní návštěvy.
+
+Výjimka k bodu 5: volitelná časově omezená relace na domácí Wi-Fi (port 8766, PIN, výchozí vypnuto) dopraví stejné `diary.zip` / `catalog.json`. Není to veřejný API, cloud ani účty. Administrace (importy, záloha, úprava míst) zůstává na `127.0.0.1`.
 
 Rozhodovací pořadí při konfliktu požadavků:
 
@@ -173,6 +175,14 @@ Přidání na plochu a Service Worker vyžadují HTTPS (výjimka `localhost`). T
 - ÚSKP ID a katalogové číslo Památkového katalogu jsou různá externí ID, ne jedno.
 - Ignorovaná položka review se musí zapamatovat (`source_type` + `external_id`), jinak se při dalším importu vrátí.
 - Archivované Place se do `catalog.json` neexportují. Návštěvy na PC zůstanou. PWA po aktualizaci katalogu ukáže návštěvu u „místo už není v katalogu“, deník nesmaže.
+
+### 4.13 Typ `RUIN` versus stav `RUIN`
+
+Typ `RUIN` je Wikidata třída *castle ruin* (Q109607) a smí viset vedle `CASTLE` / `CHATEAU`. Stav `condition = RUIN` je fyzický stav objektu. Kolekce „Zříceniny“ (Dnes, nálady, `mark_ruins_free_access`) bere sjednocení: typ **nebo** stav.
+
+V katalogu 2026-08-18 (5670 míst) to dává čtyři různá čísla ze **stejného** exportu: Dnes 1056 (sjednocení), PC přehled 1055 (jen M:N typ), Katalog typ + Za návštěvu 1015, filtr Stav 673. 343 míst má typ `RUIN` a stav `UNKNOWN` — Wikidata je zařadila mezi zříceniny, dávka P5816 stav nedoplnila.
+
+**Rozhodnuto (fáze 11):** kanonická funkce `is_ruin` = typ `RUIN` ∨ stav `RUIN`. Filtr Katalogu „Typ = Zřícenina“ používá `is_ruin`. Filtr „Stav = Zřícenina“ zůstane jen `condition`. Jednorázový backfill: typ `RUIN` + stav `UNKNOWN` + bez override → `condition = RUIN` (ne `EXTINCT`). PC dashboard `by_type` zůstane počtem M:N vazeb; přibude údaj „zříceniny (typ nebo stav)“ stejný jako Dnes.
 
 ---
 
@@ -1228,6 +1238,54 @@ Pořadí:
 
 ---
 
+### Fáze 11 — Čistota katalogu a jednotné zříceniny
+
+**Cíl:** Stejný význam „zřícenina“ všude, opravit známé špinavé záznamy v SQLite přes override (přežijí další import), nesahat do deníku. Prázdná pole OSM/sloh/zázemí se tady **nedoplňují** — to je samostatný běh importerů, ne chyba exportu.
+
+Živá data (LocalAppData, 18. 8. 2026): 5670 aktivních míst, `catalog.json` v7 je aktuální. Nový export po této fázi až po zápisu do SQLite.
+
+**Rozhodnutí (neptat se znovu):**
+
+1. **Neslučovat** dva „Karlštejn“: hrad `01a001c5-4afb-779f-82a6-ded66735a1f7` (Karlštejn / Beroun, Q214651) a zámek `01a0049e-3ca3-7601-96ad-0583b2781d58` (Svratouch / Chrudim, Q1505765) jsou dvě místa. Palác `01a01157-9a42-707b-b16d-65cf719d11a6` nechat.
+2. **Neslučovat automaticky** 88 párů stejný název + obec. Nejistá shoda → ruční `/places/…/merge`, princip 8.
+3. **Nepřepisovat** ~2610 wikidatových názvů v DB. PC UI použije stejné `displayPlaceName` jako PWA (první písmeno).
+4. OSM hodiny, pes, toalety, občerstvení, hřiště, sloh: pole jsou v modelu, v DB je 0. Až v pozdějším chatu spustit import OSM + Wikidata STYLE z `/import`. Do fáze 11 nepatří.
+5. Opravy konkrétních řádků jdou přes `place_field_overrides` + aktualizaci masteru, ne přes tichý SQL UPDATE bez override.
+
+**Implementuje se:**
+
+- Společná `is_ruin` v Pythonu (`places.py` / malý modul) i TypeScriptu (`catalog/` nebo `regions.ts` export). Použití: Dnes kolekce, nálady, `mark_ruins_free_access`, filtr typu RUIN v `filterPlaces.ts`, PC dashboard údaj vedle `by_type`.
+- Backfill `condition`: aktivní místo, typ RUIN, `condition == UNKNOWN`, bez override na `condition` → `RUIN`. Idempotentní. `EXTINCT` / `REMAINS` / `PRESERVED` se nemění. CLI: `pamatky cleanup-catalog --dry-run` / bez flagu zápis. Před zápisem `backup_database_file`.
+- Curated opravy (stejný CLI, seznam v kódu podle `public_id`):
+
+  | public_id | Změna |
+  |---|---|
+  | `01a001c5-4afb-779f-82a6-ded66735a1f7` Karlštejn (hrad) | Smazat `short_description` (review věta). Odpojit falešný zdroj `wikidata` / `Q-unclear-karlstein`. Override na popis. |
+  | `01a001eb-ce5e-74bd-89dc-78a80ecee930` Vyšehrad | Odebrat typ RUIN, `condition = PRESERVED`. Override typů + stavu. |
+  | `01a00c2e-9a14-7214-a539-5c6ca344431b` Barrandovské terasy | Typ LOOKOUT_TOWER → OTHER. |
+  | `01a01157-907a-75b2-b5d8-07ff9d0d6810` Administrativní budova textilky | Typ PALACE → OTHER. |
+  | `01a0049f-0027-7336-b045-4fd315da442e` zámek Uherčice | `municipality = Uherčice`, `district = Znojmo` (ne slepené tři obce). GPS nedomýšlet. |
+  | `01a0049f-284f-75e3-9808-58fa7a8b9d54` zámek (Benešov; Mladá Boleslav) | Nechat, `quality_status = NEEDS_REVIEW` už je. Nerozdělovat na dvě Place bez jistoty. |
+
+- PC šablony: `displayPlaceName` ekvivalent (první písmeno cs).
+- Parser Památkového katalogu: hodnota `obec` / `okres` se středníkem → místo neslepit; první díl + `NEEDS_REVIEW`, ať reimport Uherčice znovu neslepí. Existující override Uherčic import nepřepíše.
+- Po zápisu: uživatel exportuje `catalog.json` (CLI nebo UI). PWA skrývání review textu už je; po vyčištění popisu Karlštejna zmizí i ze JSON.
+
+**Neimplementuje se:** nový SPARQL, hromadná reklasifikace paláců/rozhleden, OSM import, změna `public_id`, mazání návštěv, automatické sloučení duplicit.
+
+**Testy:**
+
+- `is_ruin`: typ, stav, obojí, ani jedno, EXTINCT s typem RUIN pořád `is_ruin`.
+- Backfill: UNKNOWN+RUIN → RUIN; PRESERVED+RUIN beze změny; override condition se nepřepíše; dry-run nezapisuje.
+- Curated: Karlštejn bez review věty a bez `Q-unclear-karlstein`; Vyšehrad bez typu RUIN a se stavem PRESERVED.
+- Filtr PWA typ=RUIN == `is_ruin`; stav=RUIN jen condition.
+- Parser: CSV buňka `Brno; Milotice; Uherčice` neskončí jako jedna slepená obec v novém CanonicalRecord.
+- pytest + vitest + `tsc --noEmit`. Testy nesahají do živé LocalAppData DB.
+
+**Hotovo když:** Dnes „Zříceniny“ a Katalog „Typ = Zřícenina“ (před filtrem Za návštěvu) hlásí stejné číslo. PC dashboard ukáže totéž sjednocení. Vyšehrad není zřícenina, Barrandov není rozhledna, textilka není palác, hrad Karlštejn nemá review větu. Zámek Karlštejn ve Svratouchu existuje dál. Deník beze změny.
+
+---
+
 ## 13. Mapování akceptačního scénáře na fáze
 
 | Krok zadání | Fáze |
@@ -1281,7 +1339,7 @@ Nemění principy. Potvrzené a platné:
 
 ## 16. Stav fází
 
-Kapitola 17 je uzavřená. Fáze 1–9 (MVP) jsou hotové. Fáze 10 (Poblíž na mapě) je hotová.
+Kapitola 17 je uzavřená. Fáze 1–9 (MVP) jsou hotové. Fáze 10 (Poblíž na mapě) je hotová. Fáze 11 (čistota katalogu) je hotová.
 
 ---
 
@@ -1300,3 +1358,7 @@ Skript `scripts/pripravit-deploy-netlify.ps1` postaví prázdný app shell do `d
 Teď se vyvíjí tady. Až bude hotovo, předá se přenositelná složka (aplikace + `data/pamatky.sqlite3`) správci na **jednom** PC. Ten PC je od té chvíle jediný zdroj pravdy katalogu.
 
 Do budoucna lze složku zkopírovat na jiný stroj, ale nikdy se nesmí administrovat ze dvou PC naráz. PWA na telefonu ani na jiném PC katalog needituje.
+
+### 17.3 Čistota katalogu po click-through (2026-08-18)
+
+Rozdílné počty zřícenin nejsou druhý katalog ani starý export. Jsou to čtyři definice téhož JSON (sjednocení / M:N typ / typ+Za návštěvu / stav). Fáze 11 sjednocuje význam a opraví konkrétní špinavé řádky. OSM/sloh/zázemí zůstanou prázdné, dokud neproběhne příslušný import. Dva Karlštejny se neslučují.

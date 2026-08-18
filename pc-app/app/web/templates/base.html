@@ -4,6 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Památky{% endblock %}</title>
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("pamatky-theme");
+        if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
   <link rel="stylesheet" href="/static/vendor/pico/pico.min.css">
   <link rel="stylesheet" href="/static/app.css">
   <script src="/static/vendor/htmx/htmx.min.js" defer></script>
@@ -19,11 +27,20 @@
         {% set path = request.url.path %}
         <li><a href="/"{% if path == "/" %} aria-current="page"{% endif %}>Přehled</a></li>
         <li><a href="/places"{% if path.startswith("/places") %} aria-current="page"{% endif %}>Katalog</a></li>
-        <li><a href="/visits"{% if path.startswith("/visits") %} aria-current="page"{% endif %}>Návštěvy</a></li>
+        <li><a href="/diary"{% if path.startswith("/diary") or path.startswith("/yearbook") or path.startswith("/visits") %} aria-current="page"{% endif %}>Deník</a></li>
         <li><a href="/trips"{% if path.startswith("/trips") %} aria-current="page"{% endif %}>Výlety</a></li>
-        <li><a href="/nearby"{% if path.startswith("/nearby") %} aria-current="page"{% endif %}>Poblíž</a></li>
+        <li><a href="/nearby"{% if path.startswith("/nearby") %} aria-current="page"{% endif %}>{% if request.query_params.get("view") == "atlas" %}Atlas{% else %}Poblíž{% endif %}</a></li>
         <li><a href="/import"{% if path.startswith("/import") %} aria-current="page"{% endif %}>Import{% if open_review_count %} <span class="badge">{{ open_review_count }}</span>{% endif %}</a></li>
         <li><a href="/backup"{% if path.startswith("/backup") %} aria-current="page"{% endif %}>Záloha</a></li>
+        <li>
+          <label class="theme-switch">
+            <select id="theme-preference" aria-label="Vzhled">
+              <option value="system">Systém</option>
+              <option value="light">Světlý</option>
+              <option value="dark">Tmavý</option>
+            </select>
+          </label>
+        </li>
       </ul>
     </nav>
   </header>
@@ -79,6 +96,29 @@
         }
       });
       syncImportButtons();
+    })();
+    (function () {
+      var select = document.getElementById("theme-preference");
+      if (!(select instanceof HTMLSelectElement)) {
+        return;
+      }
+      var stored = null;
+      try {
+        stored = localStorage.getItem("pamatky-theme");
+      } catch (e) {}
+      select.value = stored === "light" || stored === "dark" ? stored : "system";
+      select.addEventListener("change", function () {
+        var value = select.value;
+        try {
+          if (value === "light" || value === "dark") {
+            localStorage.setItem("pamatky-theme", value);
+            document.documentElement.setAttribute("data-theme", value);
+          } else {
+            localStorage.removeItem("pamatky-theme");
+            document.documentElement.removeAttribute("data-theme");
+          }
+        } catch (e) {}
+      });
     })();
   </script>
 </body>

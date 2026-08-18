@@ -8,6 +8,9 @@
 <p><a href="/">← Zpět na přehled</a></p>
 {% else %}
 <p class="notice" role="status">Deník je sloučený. Místa se z deníku nezakládala.</p>
+{% if outgoing_path %}
+<p class="notice" role="status">Sloučený deník je ve složce pro telefon jako <code>diary-z-pc.zip</code>.</p>
+{% endif %}
 <ul>
   <li>návštěvy nové: {{ result.visits_inserted }}</li>
   <li>návštěvy aktualizované: {{ result.visits_updated }}</li>
@@ -18,6 +21,9 @@
   <li>výlety nové: {{ result.trips_inserted }}</li>
   <li>výlety aktualizované: {{ result.trips_updated }}</li>
   <li>výlety beze změny: {{ result.trips_unchanged }}</li>
+  {% if result.family_collapsed %}
+  <li>rodinná razítka sloučená: {{ result.family_collapsed }}</li>
+  {% endif %}
 </ul>
 {% if result.unknown_place_ids %}
 <p>Neznámá místa (návštěva uložena, místo v katalogu se nezakládá):</p>
@@ -38,6 +44,9 @@
 {% if result.backup_path %}
 <p class="muted">Záloha: <code>{{ result.backup_path }}</code></p>
 {% endif %}
-<p><a href="/">← Zpět na přehled</a></p>
+{% if photo_count %}
+<p class="muted">Uloženo osobních fotek: {{ photo_count }}.</p>
+{% endif %}
+<p><a href="/diary">Otevřít pas</a> · <a href="/visits">Seznam návštěv</a> · <a href="/">← Zpět na přehled</a></p>
 {% endif %}
 {% endblock %}

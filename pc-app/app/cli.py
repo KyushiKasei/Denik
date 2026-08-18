@@ -8,15 +8,18 @@ from pathlib import Path
 from app.config import ensure_data_dir, get_database_path
 from app.db.migrate import run_migrations
 from app.db.seed import seed_place_types
-from app.db.session import get_session
+from app.db.session import get_session, reset_engine
 from app.importers.http_client import DownloadError
 from app.importers.wikidata.client import SparqlError
 from app.logging_setup import setup_logging
 from app.services.apply_import import ImportApplyError, apply_import
+from app.services.backup import backup_database_file
+from app.services.catalog_cleanup import cleanup_catalog
 from app.services.catalog_export import export_catalog
 from app.services.diary_io import export_diary, import_diary
 from app.services.diary_schema import load_and_validate_diary
 from app.services.import_job import SOURCE_META, load_source_records
+from app.services.unesco_sites import sync_unesco_places
 
 
 def _import_source(session, source: str, *, use_cache: bool) -> int:
@@ -73,6 +76,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Importovat diary.json (idempotentní sloučení, nevytváří Place)",
     )
     diary_import_cmd.add_argument("path", type=Path, help="Cesta k diary.json")
+    diary_import_cmd.add_argument(
+        "--family",
+        action="store_true",
+        help="Stejné místo a den sloučit do jednoho razítka (lidé a poznámky se spojí)",
+    )
     source_import_cmd = sub.add_parser(
         "import-source",
         help="Importovat zdroj do katalogu (Wikidata, OSM, …) se zálohou",
@@ -86,6 +94,19 @@ def main(argv: list[str] | None = None) -> int:
         "--use-cache",
         action="store_true",
         help="Použít poslední staženou odpověď (bez sítě)",
+    )
+    sub.add_parser(
+        "sync-unesco",
+        help="Sloučit duplicity UNESCO objektů a doplnit příznak (override)",
+    )
+    cleanup_cmd = sub.add_parser(
+        "cleanup-catalog",
+        help="Fáze 11: sjednotit stav zřícenin a opravit známé špatné štítky",
+    )
+    cleanup_cmd.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Jen spočítat, nic nezapisovat",
     )
     args = parser.parse_args(argv)
 
@@ -112,13 +133,15 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "import-diary":
             data = load_and_validate_diary(args.path)
-            result = import_diary(session, data)
+            result = import_diary(session, data, family=args.family)
             print(
                 f"deník: návštěvy +{result.visits_inserted} ~{result.visits_updated} "
                 f"={result.visits_unchanged}; stavy +{result.states_inserted} "
                 f"~{result.states_updated} ={result.states_unchanged}; "
                 f"výlety +{result.trips_inserted} ~{result.trips_updated} ={result.trips_unchanged}"
             )
+            if result.family_collapsed:
+                print(f"rodinná razítka sloučená: {result.family_collapsed}")
             if result.unknown_place_ids:
                 print(f"neznámá place_id ({len(result.unknown_place_ids)}): Place nevytvořen")
             if result.backup_path:
@@ -126,6 +149,48 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "import-source":
             return _import_source(session, args.source, use_cache=args.use_cache)
+        if args.command == "sync-unesco":
+            session.close()
+            backup_path = backup_database_file(get_database_path(), "unesco")
+            reset_engine()
+            session = get_session()
+            result = sync_unesco_places(session, make_backup=False)
+            result.backup_path = backup_path
+            missing = f", chybí={','.join(result.missing)}" if result.missing else ""
+            print(
+                f"UNESCO: sloučeno={result.merged} označeno={result.flagged} "
+                f"už bylo={result.already}{missing}"
+            )
+            print(f"záloha: {result.backup_path}")
+            return 0
+        if args.command == "cleanup-catalog":
+            if args.dry_run:
+                result = cleanup_catalog(session, dry_run=True)
+                print(
+                    f"dry-run: stav zřícenin={result.condition_backfill} "
+                    f"(přeskočeno override={result.skipped_override}) "
+                    f"opravy={result.curated} zdroje={result.detached_sources} "
+                    f"už hotovo={result.already}"
+                )
+                if result.missing:
+                    print(f"chybí public_id: {', '.join(result.missing)}")
+                return 0
+            session.close()
+            backup_path = backup_database_file(get_database_path(), "cleanup")
+            reset_engine()
+            session = get_session()
+            result = cleanup_catalog(session, dry_run=False)
+            result.backup_path = backup_path
+            print(
+                f"cleanup: stav zřícenin={result.condition_backfill} "
+                f"(přeskočeno override={result.skipped_override}) "
+                f"opravy={result.curated} zdroje={result.detached_sources} "
+                f"už hotovo={result.already}"
+            )
+            if result.missing:
+                print(f"chybí public_id: {', '.join(result.missing)}")
+            print(f"záloha: {result.backup_path}")
+            return 0
     finally:
         session.close()
     return 1
