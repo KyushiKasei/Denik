@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import type { CatalogPlace, StoredVisit } from "../catalog/types";
-import { uniqueVisitedPlaceIds } from "../diary/timeline";
+import { czechCountWord, uniqueVisitedPlaceIds } from "../diary/timeline";
 import { parseGpxTrack, placesAlongTrack } from "../geo/gpx";
 import { PlaceCard } from "./PlaceCard";
 import { StampButton } from "./StampButton";
@@ -77,7 +77,7 @@ export function GpxTrack({
       {hits.length > 0 ? (
         <>
           <p className="muted small">
-            {hits.length} míst u stopy
+            {hits.length} {czechCountWord(hits.length, "místo", "místa", "míst")} u stopy
             {missed.length ? ` · ${missed.length} bez razítka` : " · všechno už máte"}
           </p>
           <div className="place-cards">

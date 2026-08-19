@@ -13,7 +13,7 @@ import { downloadDiaryBundle, importDiary, importDiaryPhotos, loadDiaryMeta, loa
 import { inspectIncomingFile } from "../diary/fileIntake";
 import type { Diary, DiaryMergeCounts, DiaryMeta } from "../diary/types";
 import { consumeSharedCache, parseSharedGeo, shareQueryFromLocation } from "../geo/shareTarget";
-import { formatDateTime } from "../diary/timeline";
+import { czechCountWord, formatDateTime } from "../diary/timeline";
 
 export function ImportPage() {
   const navigate = useNavigate();
@@ -139,7 +139,9 @@ export function ImportPage() {
         }
         if (shared.files.length) {
           setSharedFiles(shared.files);
-          setShareHint(`${shared.files.length} sdílených fotek. Přiřaďte je k návštěvám.`);
+          setShareHint(
+            `${shared.files.length} ${czechCountWord(shared.files.length, "sdílená fotka", "sdílené fotky", "sdílených fotek")}. Přiřaďte k návštěvám.`,
+          );
         } else if (shared.title.trim()) {
           navigate(`/catalog?q=${encodeURIComponent(shared.title.trim())}`, { replace: true });
         }
@@ -336,94 +338,16 @@ export function ImportPage() {
       <header className="page-header">
         <h1>Nastavení</h1>
         <p className="muted">
-          Vzhled, katalog a deník. Soubory jdou Dropboxem nebo Soubory, doma na Wi-Fi přes Safari (ne z PWA).
+          Deník a katalog z PC. Soubory jdou Dropboxem nebo Soubory, doma na Wi-Fi přes Safari (ne z PWA). Vzhled je na
+          konci stránky.
         </p>
       </header>
 
-      <h2>Vzhled</h2>
-      <p className="muted">Světlý, tmavý, nebo podle nastavení systému.</p>
-      <ThemeSwitch />
+      <h2>Výměna dat</h2>
 
       <SyncStatus catalog={catalogMeta} diary={diaryMeta} />
 
       {metaReady && currentVersion == null ? <FirstRunCoach /> : null}
-
-      <h2>Katalog</h2>
-      <p className="muted">
-        {currentVersion != null ? `Aktuální verze ${currentVersion}. ` : "Katalog ještě není nahraný. "}
-        Nahraje se jen seznam míst. Osobní deník se nemění.
-      </p>
-
-      <label className="file-picker">
-        Vybrat catalog.json
-        <input
-          type="file"
-          accept=".json,application/json,text/plain"
-          onChange={(event) => void onFile(event.target.files?.[0])}
-        />
-      </label>
-
-      {fileName ? <p className="muted">Soubor: {fileName}</p> : null}
-      {error ? (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      ) : null}
-
-      {catalog && diff ? (
-        <div className="diff-card">
-          <h2>Náhled změn</h2>
-          {sameVersion ? (
-            <p className="notice">
-              Tuto verzi katalogu už máte ({catalog.catalog_version}). Nahrávat znovu není potřeba.
-            </p>
-          ) : null}
-          <ul className="diff-counts">
-            <li>verze souboru: {catalog.catalog_version}</li>
-            <li>míst v souboru: {catalog.places.length}</li>
-            <li>nová: {diff.added}</li>
-            <li>změněná: {diff.changed}</li>
-            <li>beze změny: {diff.unchanged}</li>
-            <li>zmizelá z katalogu: {diff.removed}</li>
-            {orphanVisitCount > 0 ? (
-              <li>návštěv u zmizelých míst: {orphanVisitCount} (zůstanou, označí se jako osiřelé)</li>
-            ) : null}
-          </ul>
-          <p className="muted small">Nahradí se jen úložiště míst. Návštěvy a stavy deníku zůstanou.</p>
-          {sameVersion ? (
-            <button type="button" className="ghost" onClick={() => void apply()} disabled={busy}>
-              {busy ? "Nahrávám…" : "Přesto nahradit"}
-            </button>
-          ) : (
-            <button type="button" onClick={() => void apply()} disabled={busy}>
-              {busy ? "Nahrávám…" : "Nahradit katalog"}
-            </button>
-          )}
-        </div>
-      ) : null}
-
-      {done ? (
-        <p className="notice" role="status">
-          Katalog je uložený.
-          {existingOrphans > 0 ? ` ${existingOrphans} záznamů deníku odkazuje na místo, které už v katalogu není.` : ""}
-        </p>
-      ) : null}
-
-      {existingOrphans > 0 && !done ? (
-        <p className="orphan-banner" role="status">
-          {existingOrphans === 1
-            ? "1 místo z deníku už není v katalogu."
-            : `${existingOrphans} míst z deníku už není v katalogu.`}{" "}
-          Návštěvy zůstávají na stránce Katalog.
-        </p>
-      ) : null}
-
-      <PhotoIntake places={places} initialFiles={sharedFiles} />
-      {shareHint ? (
-        <p className="notice" role="status">
-          {shareHint}
-        </p>
-      ) : null}
 
       <h2>Deník</h2>
       <p className="muted">
@@ -432,9 +356,29 @@ export function ImportPage() {
       </p>
 
       <div className="diff-card">
+        <h2>Doma na Wi-Fi</h2>
+        <p className="muted small">
+          Safari z QR na PC je jen pošťák. Poznámky žijí v ikoně na ploše, ne v té Safari stránce. Stejná privátní síť, ne
+          guest Wi-Fi.
+        </p>
+        <ol className="lan-steps">
+          <li>Na PC v Administraci → Výměna dat zapněte domácí síť a naskenujte QR do Safari.</li>
+          <li>Tady exportujte deník a soubor uložte do Souborů.</li>
+          <li>V Safari zadejte PIN, nahrajte export, stáhněte sloučený diary.zip.</li>
+          <li>Vraťte se sem a importujte stažený zip. Volitelně stáhněte i catalog.json.</li>
+        </ol>
+        <p>
+          <button type="button" className="ghost" onClick={() => void exportNow()} disabled={exportBusy}>
+            {exportBusy ? "Exportuji…" : "1. Exportovat deník pro Safari"}
+          </button>
+        </p>
+      </div>
+
+      <div className="diff-card">
         <h2>Přes Dropbox / Soubory</h2>
         <p className="muted small">
-          Stejná složka, kterou na PC nastavíte na přehledu. V iOS sdílecím listu zvolte Uložit do Dropboxu nebo Soubory.
+          Stejná složka, kterou na PC nastavíte v Administraci → Výměna dat. V iOS sdílecím listu zvolte Uložit do
+          Dropboxu nebo Soubory.
         </p>
         <ol className="lan-steps">
           <li>Tady exportujte deník a uložte <code>diary.zip</code> do Dropboxu.</li>
@@ -449,25 +393,7 @@ export function ImportPage() {
         </p>
       </div>
 
-      <div className="diff-card">
-        <h2>Doma na Wi-Fi</h2>
-        <p className="muted small">
-          Safari z QR na PC je jen pošťák. Poznámky žijí v ikoně na ploše, ne v té Safari stránce. Stejná privátní síť, ne
-          guest Wi-Fi.
-        </p>
-        <ol className="lan-steps">
-          <li>Na PC na přehledu zapněte domácí síť a naskenujte QR do Safari.</li>
-          <li>Tady exportujte deník a soubor uložte do Souborů.</li>
-          <li>V Safari zadejte PIN, nahrajte export, stáhněte sloučený diary.zip.</li>
-          <li>Vraťte se sem a importujte stažený zip. Volitelně stáhněte i catalog.json.</li>
-        </ol>
-        <p>
-          <button type="button" className="ghost" onClick={() => void exportNow()} disabled={exportBusy}>
-            {exportBusy ? "Exportuji…" : "1. Exportovat deník pro Safari"}
-          </button>
-        </p>
-      </div>
-
+      <p className="muted small">Soubor z Wi-Fi i z Dropboxu vyberte tady.</p>
       <label className="file-picker">
         Vybrat diary.json, diary.zip nebo diary-z-pc.zip
         <input
@@ -524,6 +450,87 @@ export function ImportPage() {
           ) : null}
         </div>
       ) : null}
+
+      <h2>Import katalogu z PC do PWA</h2>
+      <p className="muted">
+        {currentVersion != null ? `Aktuální verze ${currentVersion}. ` : "Katalog ještě není nahraný. "}
+        Nahraje se jen seznam míst. Osobní deník se nemění.
+      </p>
+
+      <label className="file-picker">
+        Vybrat catalog.json
+        <input
+          type="file"
+          accept=".json,application/json,text/plain"
+          onChange={(event) => void onFile(event.target.files?.[0])}
+        />
+      </label>
+
+      {fileName ? <p className="muted">Soubor: {fileName}</p> : null}
+      {error ? (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      ) : null}
+
+      {catalog && diff ? (
+        <div className="diff-card">
+          <h2>Náhled změn</h2>
+          {sameVersion ? (
+            <p className="notice">
+              Tuto verzi katalogu už máte ({catalog.catalog_version}). Nahrávat znovu není potřeba.
+            </p>
+          ) : null}
+          <ul className="diff-counts">
+            <li>verze souboru: {catalog.catalog_version}</li>
+            <li>míst v souboru: {catalog.places.length}</li>
+            <li>nová: {diff.added}</li>
+            <li>změněná: {diff.changed}</li>
+            <li>beze změny: {diff.unchanged}</li>
+            <li>zmizelá z katalogu: {diff.removed}</li>
+            {orphanVisitCount > 0 ? (
+              <li>návštěv u zmizelých míst: {orphanVisitCount} (zůstanou, označí se jako osiřelé)</li>
+            ) : null}
+          </ul>
+          <p className="muted small">Nahradí se jen úložiště míst. Návštěvy a stavy deníku zůstanou.</p>
+          {sameVersion ? (
+            <button type="button" className="ghost" onClick={() => void apply()} disabled={busy}>
+              {busy ? "Nahrávám…" : "Přesto nahradit"}
+            </button>
+          ) : (
+            <button type="button" onClick={() => void apply()} disabled={busy}>
+              {busy ? "Nahrávám…" : "Nahradit katalog"}
+            </button>
+          )}
+        </div>
+      ) : null}
+
+      {done ? (
+        <p className="notice" role="status">
+          Katalog je uložený.
+          {existingOrphans > 0
+            ? ` ${existingOrphans} ${czechCountWord(existingOrphans, "záznam", "záznamy", "záznamů")} deníku ${existingOrphans >= 2 && existingOrphans <= 4 ? "odkazují" : "odkazuje"} na místo, které už v katalogu není.`
+            : ""}
+        </p>
+      ) : null}
+
+      {existingOrphans > 0 && !done ? (
+        <p className="orphan-banner" role="status">
+          {`${existingOrphans} ${czechCountWord(existingOrphans, "místo", "místa", "míst")} z deníku už ${existingOrphans >= 2 && existingOrphans <= 4 ? "nejsou" : "není"} v katalogu.`}{" "}
+          Návštěvy zůstávají na stránce Katalog.
+        </p>
+      ) : null}
+
+      <PhotoIntake places={places} initialFiles={sharedFiles} />
+      {shareHint ? (
+        <p className="notice" role="status">
+          {shareHint}
+        </p>
+      ) : null}
+
+      <h2>Vzhled</h2>
+      <p className="muted">Světlý, tmavý, nebo podle nastavení systému.</p>
+      <ThemeSwitch />
 
       <p className="muted small">
         <Link to="/info">Info</Link>

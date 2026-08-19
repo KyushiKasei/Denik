@@ -8,7 +8,7 @@
 {% endif %}
 
 {% if not active %}
-<p>Na počítači na přehledu zapněte <strong>Domácí síť</strong> a tuto stránku znovu načtěte.</p>
+<p>Na počítači v Administraci → Výměna dat zapněte <strong>Domácí síť</strong> a tuto stránku znovu načtěte.</p>
 {% elif not unlocked %}
 <p class="muted">Zadejte PIN z obrazovky PC. QR vás nespároval s PWA — jen otevřel tuto stránku.</p>
 <form method="post" action="/lan/unlock">

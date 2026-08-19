@@ -60,7 +60,7 @@ export async function addVisitPhoto(visitId: string, file: File): Promise<Stored
   }
   const count = await photoCountForVisit(visitId);
   if (count >= MAX_PHOTOS_PER_VISIT) {
-    throw new Error(`U návštěvy můžou být nejvýš ${MAX_PHOTOS_PER_VISIT} fotky.`);
+    throw new Error(`U návštěvy mohou být nejvýš ${MAX_PHOTOS_PER_VISIT} fotky.`);
   }
   const blob = await compressImageFile(file);
   if (blob.size > MAX_PHOTO_BYTES) {
@@ -76,7 +76,7 @@ export async function addVisitPhoto(visitId: string, file: File): Promise<Stored
   await db.transaction("rw", db.visit_photos, async () => {
     const again = await photoCountForVisit(visitId);
     if (again >= MAX_PHOTOS_PER_VISIT) {
-      throw new Error(`U návštěvy můžou být nejvýš ${MAX_PHOTOS_PER_VISIT} fotky.`);
+      throw new Error(`U návštěvy mohou být nejvýš ${MAX_PHOTOS_PER_VISIT} fotky.`);
     }
     await db.visit_photos.put(photo);
   });

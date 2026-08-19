@@ -5,7 +5,7 @@
 {% if filename %}<p class="muted">Soubor: {{ filename }}</p>{% endif %}
 {% if error %}
 <p class="error" role="alert">{{ error }}</p>
-<p><a href="/">← Zpět na přehled</a></p>
+<p><a href="/exchange">← Zpět na výměnu dat</a></p>
 {% else %}
 <p class="notice" role="status">Deník je sloučený. Místa se z deníku nezakládala.</p>
 {% if outgoing_path %}
@@ -47,6 +47,6 @@
 {% if photo_count %}
 <p class="muted">Uloženo osobních fotek: {{ photo_count }}.</p>
 {% endif %}
-<p><a href="/diary">Otevřít pas</a> · <a href="/visits">Seznam návštěv</a> · <a href="/">← Zpět na přehled</a></p>
+<p><a href="/diary">Otevřít pas</a> · <a href="/visits">Seznam návštěv</a> · <a href="/exchange">← Zpět na výměnu dat</a></p>
 {% endif %}
 {% endblock %}

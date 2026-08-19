@@ -13,6 +13,7 @@ import { PassportAlbum } from "../components/PassportAlbum";
 import { TripPanel } from "../components/TripPanel";
 import { GpxTrack } from "../components/GpxTrack";
 import {
+  czechCountWord,
   diaryHeaderStats,
   formatDiaryStatsLine,
   isDiarySection,
@@ -212,7 +213,8 @@ export function DiaryPage() {
               <section className="diary-inbox">
                 <h2>Doplnit</h2>
                 <p className="muted small">
-                  {inbox.length} {inbox.length === 1 ? "návštěva" : "návštěv"} bez fotky nebo poznámky.
+                  {inbox.length} {czechCountWord(inbox.length, "návštěva", "návštěvy", "návštěv")} bez fotky
+                  nebo poznámky.
                 </p>
                 <ul className="place-list">
                   {inbox.slice(0, 8).map((row) => {

@@ -36,6 +36,7 @@ import { useDiaryBadges } from "../diary/useDiaryBadges";
 import { appliedSearchQuery, SEARCH_DEBOUNCE_MS } from "../text/fold";
 import { saveWorthFilter } from "../catalog/visitWorth";
 import { MONTH_OPTIONS } from "../catalog/openingHours";
+import { czechCountWord } from "../diary/timeline";
 
 const PAGE_SIZE = 80;
 
@@ -181,6 +182,7 @@ export function CatalogPage() {
     [places, filters, visitedIds, wantIds, favIds],
   );
   const visible = filtered.slice(0, limit);
+  const remaining = Math.min(PAGE_SIZE, filtered.length - visible.length);
 
   const visitedCount = useMemo(
     () => (places ?? []).filter((place) => visitedIds.has(place.id)).length,
@@ -247,8 +249,8 @@ export function CatalogPage() {
         <h1>Katalog</h1>
         <p className="muted">
           {filtered.length === places.length
-            ? `${places.length} míst`
-            : `${filtered.length} z ${places.length} míst`}
+            ? `${places.length} ${czechCountWord(places.length, "místo", "místa", "míst")}`
+            : `${filtered.length} z ${places.length} ${czechCountWord(places.length, "místa", "míst", "míst")}`}
           {version != null ? ` · verze ${version}` : ""}
           {orphans.length > 0 ? ` · ${orphans.length} mimo katalog` : ""}
         </p>
@@ -567,7 +569,8 @@ export function CatalogPage() {
       {visible.length < filtered.length ? (
         <p>
           <button type="button" className="ghost" onClick={() => setLimit((value) => value + PAGE_SIZE)}>
-            Dalších {Math.min(PAGE_SIZE, filtered.length - visible.length)} míst
+            {remaining >= 5 ? "Dalších" : "Další"} {remaining}{" "}
+            {czechCountWord(remaining, "místo", "místa", "míst")}
           </button>
         </p>
       ) : null}

@@ -43,9 +43,13 @@ def test_health_ok(tmp_path: Path, monkeypatch) -> None:
 
     with TestClient(app) as client:
         response = client.get("/health")
+        docs = client.get("/docs")
+        openapi = client.get("/openapi.json")
     reset_engine()
     assert response.status_code == 200
     assert response.json() == {"ok": True}
+    assert docs.status_code == 404
+    assert openapi.status_code == 404
 
 
 def test_catalog_hides_extra_filters_and_keeps_new_place_button(tmp_path: Path, monkeypatch) -> None:

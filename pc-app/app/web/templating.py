@@ -3,10 +3,17 @@ from pathlib import Path
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 
-from app.db.enums import label
-from app.services.display import display_place_name
+from app.db.enums import format_types, label
 from app.services.diary_present import format_visit_date
-from app.services.source_urls import is_http_url, photo_display_url, source_page_url
+from app.services.display import (
+    display_place_name,
+    explain_match_reason,
+    format_distance_m,
+    incoming_is_sparse,
+    incoming_review_label,
+    identity_conflicts,
+)
+from app.services.source_urls import identity_source_url, is_http_url, photo_display_url, source_page_url
 from app.services.stamp_art import place_stamp_svg, stamp_svg, visit_stamp_svg
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
@@ -109,3 +116,10 @@ templates.env.globals["place_stamp_svg"] = place_stamp_svg
 templates.env.globals["format_visit_date"] = format_visit_date
 templates.env.globals["display_place_name"] = display_place_name
 templates.env.filters["display_place_name"] = display_place_name
+templates.env.globals["explain_match_reason"] = explain_match_reason
+templates.env.globals["incoming_review_label"] = incoming_review_label
+templates.env.globals["format_distance_m"] = format_distance_m
+templates.env.globals["incoming_is_sparse"] = incoming_is_sparse
+templates.env.globals["identity_conflicts"] = identity_conflicts
+templates.env.globals["format_types"] = format_types
+templates.env.globals["identity_source_url"] = identity_source_url

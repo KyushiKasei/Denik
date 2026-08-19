@@ -25,13 +25,13 @@
       </ul>
       <ul>
         {% set path = request.url.path %}
+        {% set admin = path.startswith("/import") or path.startswith("/backup") or path.startswith("/exchange") %}
         <li><a href="/"{% if path == "/" %} aria-current="page"{% endif %}>Přehled</a></li>
         <li><a href="/places"{% if path.startswith("/places") %} aria-current="page"{% endif %}>Katalog</a></li>
         <li><a href="/diary"{% if path.startswith("/diary") or path.startswith("/yearbook") or path.startswith("/visits") %} aria-current="page"{% endif %}>Deník</a></li>
         <li><a href="/trips"{% if path.startswith("/trips") %} aria-current="page"{% endif %}>Výlety</a></li>
         <li><a href="/nearby"{% if path.startswith("/nearby") %} aria-current="page"{% endif %}>{% if request.query_params.get("view") == "atlas" %}Atlas{% else %}Poblíž{% endif %}</a></li>
-        <li><a href="/import"{% if path.startswith("/import") %} aria-current="page"{% endif %}>Import{% if open_review_count %} <span class="badge">{{ open_review_count }}</span>{% endif %}</a></li>
-        <li><a href="/backup"{% if path.startswith("/backup") %} aria-current="page"{% endif %}>Záloha</a></li>
+        <li><a href="/exchange"{% if admin %} aria-current="page"{% endif %}>Administrace{% if open_review_count %} <span class="badge">{{ open_review_count }}</span>{% endif %}</a></li>
         <li>
           <label class="theme-switch">
             <select id="theme-preference" aria-label="Vzhled">
@@ -43,6 +43,15 @@
         </li>
       </ul>
     </nav>
+    {% if admin %}
+    <nav class="admin-subnav" aria-label="Administrace">
+      <ul>
+        <li><a href="/exchange"{% if path.startswith("/exchange") %} aria-current="page"{% endif %}>Výměna dat</a></li>
+        <li><a href="/import"{% if path.startswith("/import") %} aria-current="page"{% endif %}>Import památek{% if open_review_count %} <span class="badge">{{ open_review_count }}</span>{% endif %}</a></li>
+        <li><a href="/backup"{% if path.startswith("/backup") %} aria-current="page"{% endif %}>Záloha</a></li>
+      </ul>
+    </nav>
+    {% endif %}
   </header>
   <div class="container" id="import-live"
        hx-get="/import/progress"

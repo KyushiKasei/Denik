@@ -39,7 +39,7 @@ from app.services.overrides import (
     has_override,
     master_value,
 )
-from app.services.source_urls import identity_source_url
+from app.services.source_urls import identity_source_url, is_http_url
 from app.services.values import decode_value, encode_value, values_equal
 
 _log = get_logger()
@@ -248,7 +248,7 @@ def _page_url_for(source_type: str, external_id: str | None, record: CanonicalRe
     built = identity_source_url(source_type, external_id)
     if built:
         return built
-    if with_values:
+    if with_values and is_http_url(record.source_url):
         return record.source_url
     return None
 
@@ -261,6 +261,7 @@ def _ensure_source(
     record: CanonicalRecord,
     *,
     with_values: bool,
+    reassign: bool = False,
 ) -> tuple[PlaceSource, bool]:
     """Vrátí (source, changed)."""
     existing = _lookup_source(session, source_type, external_id, place_id=place.id)
@@ -268,6 +269,7 @@ def _ensure_source(
     raw = json.dumps(record.to_dict(), ensure_ascii=False, default=str)
     page_url = _page_url_for(source_type, external_id, record, with_values=with_values)
     created = existing is None
+    moved = False
     if existing is None:
         source = PlaceSource(
             place_id=place.id,
@@ -284,9 +286,20 @@ def _ensure_source(
         session.flush()
     else:
         if existing.place_id != place.id:
-            raise RuntimeError(
-                f"Externí ID {source_type}/{external_id} patří jinému Place (id={existing.place_id})"
+            if not reassign:
+                raise RuntimeError(
+                    f"Externí ID {source_type}/{external_id} patří jinému Place (id={existing.place_id})"
+                )
+            _log.info(
+                "identity reassigned %s/%s from place_id=%s to place_id=%s",
+                source_type,
+                external_id,
+                existing.place_id,
+                place.id,
             )
+            existing.place_id = place.id
+            existing.place = place
+            moved = True
         source = existing
         # Identita z jiného zdroje (RÚIAN nese wikidata/osm ID) nesmí přepsat cizí raw.
         if with_values:
@@ -299,7 +312,7 @@ def _ensure_source(
     values_changed = False
     if with_values:
         values_changed = _sync_source_values(session, source, record)
-    return source, created or values_changed
+    return source, created or moved or values_changed
 
 
 def _sync_source_values(session: Session, source: PlaceSource, record: CanonicalRecord) -> bool:
@@ -343,10 +356,18 @@ def _old_source_value(session: Session, source: PlaceSource, field_name: str) ->
     return decode_value(row.value_json) if row else None
 
 
-def _attach_identities(session: Session, place: Place, record: CanonicalRecord) -> bool:
+def _attach_identities(
+    session: Session, place: Place, record: CanonicalRecord, *, reassign: bool = False
+) -> bool:
     changed = False
     _, source_changed = _ensure_source(
-        session, place, record.source_type, record.external_id, record, with_values=True
+        session,
+        place,
+        record.source_type,
+        record.external_id,
+        record,
+        with_values=True,
+        reassign=reassign,
     )
     changed = changed or source_changed
     primary = (record.source_type, record.external_id)
@@ -354,7 +375,13 @@ def _attach_identities(session: Session, place: Place, record: CanonicalRecord) 
         if (source_type, external_id) == primary:
             continue
         _, extra_changed = _ensure_source(
-            session, place, source_type, external_id, record, with_values=False
+            session,
+            place,
+            source_type,
+            external_id,
+            record,
+            with_values=False,
+            reassign=reassign,
         )
         if extra_changed:
             changed = True
@@ -598,7 +625,14 @@ def create_place_from_record(session: Session, record: CanonicalRecord, run: Imp
     return place
 
 
-def update_place_from_record(session: Session, place: Place, record: CanonicalRecord, run: ImportRun) -> bool:
+def update_place_from_record(
+    session: Session,
+    place: Place,
+    record: CanonicalRecord,
+    run: ImportRun,
+    *,
+    reassign_identities: bool = False,
+) -> bool:
     public_id = place.public_id
     old_source_values: dict[str, Any] = {}
     primary = _lookup_source(
@@ -607,7 +641,9 @@ def update_place_from_record(session: Session, place: Place, record: CanonicalRe
     if primary is not None:
         for field_name in SOURCE_VALUE_FIELDS:
             old_source_values[field_name] = _old_source_value(session, primary, field_name)
-    identities_changed = _attach_identities(session, place, record)
+    identities_changed = _attach_identities(
+        session, place, record, reassign=reassign_identities
+    )
     master_changed = _apply_master_from_record(
         session, place, record, run, creating=False, old_source_values=old_source_values
     )
@@ -1206,7 +1242,7 @@ def resolve_merge(session: Session, review: ImportReview, place: Place) -> Place
     record = review_record(review)
     run = review.import_run
     public_id = place.public_id
-    update_place_from_record(session, place, record, run)
+    update_place_from_record(session, place, record, run, reassign_identities=True)
     if place.public_id != public_id:
         raise ValueError("Place.public_id is immutable and must never be changed")
     review.status = "merged"

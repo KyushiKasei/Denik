@@ -65,7 +65,10 @@ def test_mvp_file_roundtrip_without_sql(client) -> None:
     home = client.get("/")
     assert home.status_code == 200
     assert "Aktivních míst" in home.text
-    assert "Záloha a obnova" in home.text
+    assert "Administrace" in home.text
+    backup = client.get("/backup")
+    assert backup.status_code == 200
+    assert "Záloha a obnova" in backup.text
 
     # 3: import testovacího katalogu (fixture, ne SQL).
     applied = client.post("/import/apply", data={"fixture": DEFAULT_FIXTURE.name}, follow_redirects=True)

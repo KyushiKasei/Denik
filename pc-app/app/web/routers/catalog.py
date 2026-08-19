@@ -9,9 +9,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from starlette.status import HTTP_303_SEE_OTHER, HTTP_404_NOT_FOUND
 
-from app.config import get_database_path, get_visit_photos_dir
+from app.config import get_visit_photos_dir
 from app.db.models import Place
-from app.services.backup import list_backups
 from app.deps import db_session
 from app.services.catalog_export import catalog_export_status, export_catalog
 from app.services.trips import add_stop, get_trip, list_trips, list_upcoming_trips, trips_accepting_place
@@ -133,7 +132,7 @@ def _notice(request: Request) -> str | None:
 
 def _exchange_error_redirect(exc: ExchangeError) -> RedirectResponse:
     return RedirectResponse(
-        f"/?notice=exchange_error&reason={quote(str(exc))}",
+        f"/exchange?notice=exchange_error&reason={quote(str(exc))}",
         status_code=HTTP_303_SEE_OTHER,
     )
 
@@ -148,14 +147,23 @@ def dashboard(request: Request, session: Session = Depends(db_session)) -> HTMLR
         "dashboard.html",
         {
             "stats": stats,
-            "db_path": str(get_database_path()),
-            "export_status": catalog_export_status(session),
-            "diary_status": diary_export_status(session),
-            "diary_issues": list_open_diary_issues(session),
-            "backup_count": len(list_backups(get_database_path())),
             "notice": _notice(request),
             "trip_today": trip_today_progress(trip, visits, today_iso_date()) if trip is not None else None,
             "recent_stamps": recent_stamps(visits),
+        },
+    )
+
+
+@router.get("/exchange", response_class=HTMLResponse)
+def exchange_page(request: Request, session: Session = Depends(db_session)) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request,
+        "exchange/index.html",
+        {
+            "export_status": catalog_export_status(session),
+            "diary_status": diary_export_status(session),
+            "diary_issues": list_open_diary_issues(session),
+            "notice": _notice(request),
             "lan": lan_status(),
             "exchange": exchange_status(),
         },
@@ -232,7 +240,7 @@ def open_export_folder() -> RedirectResponse:
     from app.config import ensure_data_dir
 
     open_in_os(ensure_data_dir() / "export")
-    return RedirectResponse("/?notice=folder_opened", status_code=HTTP_303_SEE_OTHER)
+    return RedirectResponse("/exchange?notice=folder_opened", status_code=HTTP_303_SEE_OTHER)
 
 
 @router.post("/diary/export")
@@ -284,7 +292,7 @@ def exchange_folder_save(folder: str = Form("")) -> RedirectResponse:
         save_exchange_folder(folder)
     except ExchangeError as exc:
         return _exchange_error_redirect(exc)
-    return RedirectResponse("/?notice=exchange_saved", status_code=HTTP_303_SEE_OTHER)
+    return RedirectResponse("/exchange?notice=exchange_saved", status_code=HTTP_303_SEE_OTHER)
 
 
 @router.post("/exchange/open-folder")
@@ -295,7 +303,7 @@ def exchange_open_folder() -> RedirectResponse:
         open_in_os(require_exchange_folder())
     except ExchangeError as exc:
         return _exchange_error_redirect(exc)
-    return RedirectResponse("/?notice=exchange_opened", status_code=HTTP_303_SEE_OTHER)
+    return RedirectResponse("/exchange?notice=exchange_opened", status_code=HTTP_303_SEE_OTHER)
 
 
 @router.post("/exchange/import-diary", response_class=HTMLResponse)
@@ -342,7 +350,7 @@ def exchange_catalog(session: Session = Depends(db_session)) -> RedirectResponse
         write_catalog_to_exchange(session)
     except ExchangeError as exc:
         return _exchange_error_redirect(exc)
-    return RedirectResponse("/?notice=exchange_catalog", status_code=HTTP_303_SEE_OTHER)
+    return RedirectResponse("/exchange?notice=exchange_catalog", status_code=HTTP_303_SEE_OTHER)
 
 
 @router.get("/visit-photos/{visit_id}/{filename}")

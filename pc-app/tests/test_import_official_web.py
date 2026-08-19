@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.datastructures import FormData
 
-from app.db.models import PlaceSource
+from app.db.models import Place, PlaceSource
 from app.importers.official_web.importer import can_enrich_place, records_for_places
 from app.importers.official_web.parser import classify_html, parse_public_ids, skip_website
 from app.services.apply_import import apply_import

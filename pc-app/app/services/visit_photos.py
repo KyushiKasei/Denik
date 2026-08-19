@@ -43,7 +43,7 @@ def save_visit_photo(visit_public_id: str, filename: str, data: bytes) -> Path:
         name = f"{name}.jpg"
     target = visit_photo_dir(visit_public_id) / name
     if not target.exists() and len(list_visit_photos(visit_public_id)) >= MAX_PHOTOS_PER_VISIT:
-        raise ValueError(f"U návštěvy můžou být nejvýš {MAX_PHOTOS_PER_VISIT} fotky.")
+        raise ValueError(f"U návštěvy mohou být nejvýš {MAX_PHOTOS_PER_VISIT} fotky.")
     target.write_bytes(data)
     return target
 

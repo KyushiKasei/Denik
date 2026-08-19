@@ -175,7 +175,7 @@ def move_stop(session: Session, trip: Trip, place_public_id: str, direction: int
 def consecutive_stop_km(trip: Trip) -> list[float | None]:
     stops = sorted(trip.stops, key=lambda item: item.sort_order)
     gaps: list[float | None] = []
-    for left, right in zip(stops, stops[1:]):
+    for left, right in zip(stops, stops[1:], strict=False):
         from_place = left.place
         to_place = right.place
         if (

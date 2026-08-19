@@ -78,7 +78,7 @@ export function WeekendPlanner({
       return;
     }
     if (preview.length < WEEKEND_MIN_STOPS) {
-      setError("V okruhu jsou méně než dvě otevřená místa z „chci navštívit“. Přidejte hvězdičky, nebo zvětšete okruh.");
+      setError("V okruhu nejsou ani dvě otevřená místa z „chci navštívit“. Přidejte hvězdičky, nebo zvětšete okruh.");
       return;
     }
     setBusy(true);

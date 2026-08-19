@@ -109,6 +109,8 @@ def test_review_queue_merge_create_ignore_buttons(client) -> None:
     assert "Vytvořit jako nové" in detail.text
     assert "Ignorovat" in detail.text
     assert "Otevřené" in detail.text or "otevřen" in detail.text.lower()
+    assert "Wikipedia" in detail.text or "Mapy.cz" in detail.text
+    assert "/static/review-map.js" in detail.text
     home = client.get("/")
     assert home.status_code == 200
     assert 'class="badge"' in home.text
@@ -173,6 +175,8 @@ def test_review_reprocess_merges_osm_centroid(client) -> None:
     assert listing.status_code == 200
     assert "Přepočítat frontu" in listing.text
     assert "relation/10843713" in listing.text
+    assert "Blízko na mapě" in listing.text
+    assert "C1 distance=" not in listing.text
 
     done = client.post("/import/reviews/reprocess", follow_redirects=True)
     assert done.status_code == 200

@@ -6,6 +6,7 @@ import {
   type ExportReminder as ExportReminderInfo,
 } from "../diary/reminder";
 import { downloadDiaryBundle } from "../diary/store";
+import { czechCountWord } from "../diary/timeline";
 
 export function ExportReminder({ onActiveChange }: { onActiveChange?: (active: boolean) => void }) {
   const [info, setInfo] = useState<ExportReminderInfo | null>(null);
@@ -63,10 +64,10 @@ export function ExportReminder({ onActiveChange }: { onActiveChange?: (active: b
         <strong>Záloha deníku</strong>
         <p>
           {info.neverExported
-            ? `Deník ještě nebyl exportován (${info.newVisits} návštěv).`
+            ? `Deník ještě nebyl exportován (${info.newVisits} ${czechCountWord(info.newVisits, "návštěva", "návštěvy", "návštěv")}).`
             : info.daysSinceExport != null && info.daysSinceExport >= 14
-              ? `Od posledního exportu uplynulo ${info.daysSinceExport} dní.`
-              : `Od posledního exportu přibylo ${info.newVisits} návštěv.`}{" "}
+              ? `Od posledního exportu uplynulo ${info.daysSinceExport} ${czechCountWord(info.daysSinceExport, "den", "dny", "dní")}.`
+              : `Od posledního exportu přibylo ${info.newVisits} ${czechCountWord(info.newVisits, "návštěva", "návštěvy", "návštěv")}.`}{" "}
           Exportujte <code>diary.json</code> do Dropboxu nebo do souboru.
         </p>
       </div>

@@ -109,11 +109,11 @@
 <h2>Odkazy</h2>
 <dl class="detail-grid">
   <dt>Oficiální web</dt>
-  <dd>{% if place.official_website %}<a href="{{ place.official_website }}" target="_blank" rel="noopener">{{ place.official_website }}</a>{% else %}—{% endif %}</dd>
+  <dd>{% if place.official_website and is_http_url(place.official_website) %}<a href="{{ place.official_website }}" target="_blank" rel="noopener">{{ place.official_website }}</a>{% elif place.official_website %}{{ place.official_website }}{% else %}—{% endif %}</dd>
   <dt>Wikipedia</dt>
-  <dd>{% if place.wikipedia_url %}<a href="{{ place.wikipedia_url }}" target="_blank" rel="noopener">{{ place.wikipedia_url }}</a>{% else %}—{% endif %}</dd>
+  <dd>{% if place.wikipedia_url and is_http_url(place.wikipedia_url) %}<a href="{{ place.wikipedia_url }}" target="_blank" rel="noopener">{{ place.wikipedia_url }}</a>{% elif place.wikipedia_url %}{{ place.wikipedia_url }}{% else %}—{% endif %}</dd>
   <dt>Otevírací doba</dt>
-  <dd>{% if place.opening_hours_url %}<a href="{{ place.opening_hours_url }}" target="_blank" rel="noopener">{{ place.opening_hours_url }}</a>{% else %}—{% endif %}</dd>
+  <dd>{% if place.opening_hours_url and is_http_url(place.opening_hours_url) %}<a href="{{ place.opening_hours_url }}" target="_blank" rel="noopener">{{ place.opening_hours_url }}</a>{% elif place.opening_hours_url %}{{ place.opening_hours_url }}{% else %}—{% endif %}</dd>
   <dt>OSM hodiny</dt>
   <dd>{% if place.osm_opening_hours %}{{ place.osm_opening_hours }}{% else %}—{% endif %}</dd>
   <dt>Poslední vstup</dt>
@@ -139,7 +139,7 @@
   <dt>Rok vzniku</dt>
   <dd>{{ place.inception_year or "—" }}</dd>
   <dt>Vstupenky</dt>
-  <dd>{% if place.ticket_url %}<a href="{{ place.ticket_url }}" target="_blank" rel="noopener">{{ place.ticket_url }}</a>{% else %}—{% endif %}</dd>
+  <dd>{% if place.ticket_url and is_http_url(place.ticket_url) %}<a href="{{ place.ticket_url }}" target="_blank" rel="noopener">{{ place.ticket_url }}</a>{% elif place.ticket_url %}{{ place.ticket_url }}{% else %}—{% endif %}</dd>
 </dl>
 
 <p class="muted">Vytvořeno {{ place.created_at }} · Upraveno {{ place.updated_at }}{% if place.archived_at %} · Archivováno {{ place.archived_at }}{% endif %}</p>

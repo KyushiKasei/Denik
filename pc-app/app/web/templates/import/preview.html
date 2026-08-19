@@ -64,7 +64,7 @@
       <td>{{ import_code_label("level", item.level) }}</td>
       <td>{{ import_code_label("action", item.action) }}</td>
       <td>{% if item.public_id %}<code>{{ item.public_id }}</code>{% else %}—{% endif %}</td>
-      <td>{{ item.reason }}</td>
+      <td>{{ explain_match_reason(item.reason) }}</td>
     </tr>
     {% endfor %}
   </tbody>

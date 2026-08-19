@@ -27,7 +27,7 @@ from app.web.templating import templates
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
-lan_app = FastAPI(title="Památky — domácí síť")
+lan_app = FastAPI(title="Památky — domácí síť", docs_url=None, redoc_url=None, openapi_url=None)
 lan_app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 

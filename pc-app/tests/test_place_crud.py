@@ -62,6 +62,26 @@ def test_create_place(client) -> None:
     assert "place-list-thumb is-empty" in listing.text
 
 
+def test_place_detail_does_not_link_javascript_urls(client) -> None:
+    client.post("/places", data=_payload())
+    public_id = _public_id_from_db()
+    session = get_session()
+    try:
+        place = session.scalar(select(Place).where(Place.public_id == public_id))
+        assert place is not None
+        place.wikipedia_url = "javascript:alert(1)"
+        place.official_website = "javascript:alert(2)"
+        place.opening_hours_url = "javascript:alert(3)"
+        place.ticket_url = "javascript:alert(4)"
+        session.commit()
+    finally:
+        session.close()
+    detail = client.get(f"/places/{public_id}")
+    assert detail.status_code == 200
+    assert 'href="javascript:' not in detail.text
+    assert "javascript:alert(1)" in detail.text
+
+
 def test_place_pages_show_catalog_photo(client) -> None:
     client.post("/places", data=_payload())
     public_id = _public_id_from_db()

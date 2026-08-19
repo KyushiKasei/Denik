@@ -14,6 +14,7 @@ from app.db.models import (
     ImportRun,
     Place,
     PlaceFieldOverride,
+    PlacePhoto,
     PlaceSource,
 )
 from app.db.session import create_engine_for
@@ -27,6 +28,7 @@ from app.services.apply_import import (
     resolve_create_new,
     resolve_ignore,
     resolve_merge,
+    update_place_from_record,
 )
 from app.services.matching import (
     LEVEL_A,
@@ -575,6 +577,205 @@ def test_review_merge_keeps_public_id_and_enables_level_a(session: Session) -> N
     assert again.level == LEVEL_A
 
 
+def test_review_merge_reassigns_identity_owned_by_other_place(session: Session) -> None:
+    _apply(
+        session,
+        [
+            _record(
+                external_id="Q-lower",
+                name="Dolní zámek",
+                municipality="Benešov nad Ploučnicí",
+            ),
+            _record(
+                external_id="Q-complex",
+                name="Benešov nad Ploučnicí",
+                municipality="Benešov nad Ploučnicí",
+            ),
+        ],
+    )
+    owner = session.scalar(select(Place).where(Place.name == "Dolní zámek"))
+    target = session.scalar(select(Place).where(Place.name == "Benešov nad Ploučnicí"))
+    assert owner is not None and target is not None
+    session.add(
+        PlaceSource(
+            place_id=owner.id,
+            source_type="official_web",
+            external_id="zamek-test.cz",
+            source_url="https://www.zamek-test.cz/dolni",
+            created_at="2026-08-19T04:00:00+02:00",
+            updated_at="2026-08-19T04:00:00+02:00",
+        )
+    )
+    session.commit()
+    incoming = CanonicalRecord.from_dict(
+        {
+            "source_type": "official_web",
+            "external_id": "zamek-test.cz",
+            "external_ids": {"official_web": "zamek-test.cz", "wikidata": "Q-complex"},
+            "name": "Benešov nad Ploučnicí",
+            "municipality": "Benešov nad Ploučnicí",
+            "official_website": "https://www.zamek-test.cz/",
+            "fetched_at": "2026-08-19T05:00:00+02:00",
+            "allow_create": False,
+        }
+    )
+    run = session.scalar(select(ImportRun).order_by(ImportRun.id.desc()))
+    assert run is not None
+    review = ImportReview(
+        import_run_id=run.id,
+        source_type="official_web",
+        external_id="zamek-test.cz",
+        raw_data=json.dumps(incoming.to_dict(), ensure_ascii=False),
+        status="open",
+        candidate_place_id=target.id,
+        match_reason="A: stejné externí ID na více různých Place",
+    )
+    session.add(review)
+    session.commit()
+    resolve_merge(session, review, target)
+    session.refresh(review)
+    session.refresh(owner)
+    session.refresh(target)
+    web = session.scalar(
+        select(PlaceSource).where(
+            PlaceSource.source_type == "official_web",
+            PlaceSource.external_id == "zamek-test.cz",
+        )
+    )
+    assert web is not None
+    assert web.place_id == target.id
+    assert review.status == "merged"
+    assert all(s.external_id != "zamek-test.cz" for s in owner.sources)
+
+
+def test_update_does_not_steal_identity_from_other_place(session: Session) -> None:
+    _apply(
+        session,
+        [
+            _record(
+                external_id="Q-lower",
+                name="Dolní zámek",
+                municipality="Benešov nad Ploučnicí",
+            ),
+            _record(
+                external_id="Q-complex",
+                name="Benešov nad Ploučnicí",
+                municipality="Benešov nad Ploučnicí",
+            ),
+        ],
+    )
+    owner = session.scalar(select(Place).where(Place.name == "Dolní zámek"))
+    target = session.scalar(select(Place).where(Place.name == "Benešov nad Ploučnicí"))
+    assert owner is not None and target is not None
+    session.add(
+        PlaceSource(
+            place_id=owner.id,
+            source_type="official_web",
+            external_id="zamek-test.cz",
+            created_at="2026-08-19T04:00:00+02:00",
+            updated_at="2026-08-19T04:00:00+02:00",
+        )
+    )
+    session.commit()
+    incoming = CanonicalRecord.from_dict(
+        {
+            "source_type": "official_web",
+            "external_id": "zamek-test.cz",
+            "external_ids": {"official_web": "zamek-test.cz"},
+            "name": "Benešov nad Ploučnicí",
+            "fetched_at": "2026-08-19T05:00:00+02:00",
+        }
+    )
+    run = session.scalar(select(ImportRun).order_by(ImportRun.id.desc()))
+    assert run is not None
+    with pytest.raises(RuntimeError, match="patří jinému Place"):
+        update_place_from_record(session, target, incoming, run)
+
+
+def test_same_commons_photo_without_source_is_level_a(session: Session) -> None:
+    _apply(
+        session,
+        [
+            _record(
+                external_id="Q-miletin",
+                name="Zámek Miletín",
+                municipality="Miletín",
+            )
+        ],
+    )
+    place = session.scalar(select(Place))
+    assert place is not None
+    session.add(
+        PlacePhoto(
+            place_id=place.id,
+            source="wikimedia_commons",
+            original_url="https://commons.wikimedia.org/wiki/File:Miletin-test.jpg",
+            source_url="https://commons.wikimedia.org/wiki/File:Miletin-test.jpg",
+            created_at="2026-08-19T05:00:00+02:00",
+        )
+    )
+    session.commit()
+    incoming = CanonicalRecord.from_dict(
+        {
+            "source_type": "wikimedia_commons",
+            "external_id": "Miletin-test.jpg",
+            "external_ids": {"wikimedia_commons": "Miletin-test.jpg"},
+            "name": "Zámek Miletín",
+            "municipality": "Miletín",
+            "image": {
+                "filename": "Miletin-test.jpg",
+                "original_url": "https://commons.wikimedia.org/wiki/File:Miletin-test.jpg",
+            },
+            "fetched_at": "2026-08-19T05:00:00+02:00",
+            "allow_create": False,
+        }
+    )
+    decision = match_record(session, incoming)
+    assert decision.level == LEVEL_A
+    assert decision.place is not None
+    assert decision.place.id == place.id
+
+
+def test_same_commons_photo_on_two_places_goes_to_review(session: Session) -> None:
+    _apply(
+        session,
+        [
+            _record(external_id="Q-named", name="Zámek Miletín", municipality="Miletín"),
+            _record(external_id="Q-stub", name="Q71719452", municipality="Miletín"),
+        ],
+    )
+    places = list(session.scalars(select(Place)).all())
+    assert len(places) == 2
+    url = "https://commons.wikimedia.org/wiki/File:Miletin-shared.jpg"
+    for place in places:
+        session.add(
+            PlacePhoto(
+                place_id=place.id,
+                source="wikimedia_commons",
+                original_url=url,
+                source_url=url,
+                created_at="2026-08-19T05:00:00+02:00",
+            )
+        )
+    session.commit()
+    incoming = CanonicalRecord.from_dict(
+        {
+            "source_type": "wikimedia_commons",
+            "external_id": "Miletin-shared.jpg",
+            "external_ids": {"wikimedia_commons": "Miletin-shared.jpg"},
+            "name": "Zámek Miletín",
+            "municipality": "Miletín",
+            "image": {"filename": "Miletin-shared.jpg", "original_url": url},
+            "fetched_at": "2026-08-19T05:00:00+02:00",
+            "allow_create": False,
+        }
+    )
+    decision = match_record(session, incoming)
+    assert decision.level == LEVEL_C
+    assert len(decision.candidates) == 2
+    assert "fotka" in decision.reason
+
+
 def test_review_ignore_skips_next_import(session: Session) -> None:
     _apply(session, [_record(external_id="Q214651", name="Karlštejn", municipality="Karlštejn",
                              district="Beroun", latitude=49.93944, longitude=14.18806)])
@@ -757,4 +958,76 @@ def test_merge_two_existing_places_keeps_winner_public_id(session: Session) -> N
     assert source is not None
     assert source.place_id == winner.id
     assert session.scalar(select(func.count()).select_from(Place)) == 2
+
+
+def test_merge_places_sharing_photos_keeps_wikipedia_winner(session: Session) -> None:
+    from app.services.merge_places import merge_places_sharing_photos
+
+    winner = Place(
+        name="zámek Krásný Dvůr",
+        municipality="Krásný Dvůr",
+        wikipedia_url="https://cs.wikipedia.org/wiki/Kr%C3%A1sn%C3%BD_Dv%C5%AFr_(z%C3%A1mek)",
+        condition="UNKNOWN",
+        visitability="UNKNOWN",
+    )
+    loser = Place(
+        name="zámek Krásný Dvůr - hlavní budova",
+        municipality="Krásný Dvůr",
+        condition="UNKNOWN",
+        visitability="UNKNOWN",
+    )
+    session.add_all([winner, loser])
+    session.flush()
+    url = "https://commons.wikimedia.org/wiki/File:Krasny_Dvur_shared.jpg"
+    session.add_all(
+        [
+            PlaceSource(
+                place_id=winner.id,
+                source_type="wikidata",
+                external_id="Q1373051",
+                created_at="t",
+                updated_at="t",
+            ),
+            PlaceSource(
+                place_id=loser.id,
+                source_type="wikidata",
+                external_id="Q120174820",
+                created_at="t",
+                updated_at="t",
+            ),
+            PlacePhoto(
+                place_id=winner.id,
+                source="wikimedia_commons",
+                original_url=url,
+                source_url=url,
+                created_at="t",
+            ),
+            PlacePhoto(
+                place_id=loser.id,
+                source="wikimedia_commons",
+                original_url=url,
+                source_url=url,
+                created_at="t",
+            ),
+        ]
+    )
+    session.commit()
+    winner_id = winner.public_id
+    merged = merge_places_sharing_photos(session)
+    assert len(merged) == 1
+    keep, absorbed = merged[0]
+    assert keep.public_id == winner_id
+    assert [place.public_id for place in absorbed] == [loser.public_id]
+    session.refresh(winner)
+    session.refresh(loser)
+    assert loser.archived_at is not None
+    assert loser.merged_into_public_id == winner_id
+    assert "hlavní budova" in " ".join(winner.alt_names)
+    qids = [
+        row.external_id
+        for row in session.scalars(select(PlaceSource).where(PlaceSource.place_id == winner.id)).all()
+        if row.source_type == "wikidata"
+    ]
+    assert set(qids) == {"Q1373051", "Q120174820"}
+    assert merge_places_sharing_photos(session) == []
 

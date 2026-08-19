@@ -54,6 +54,16 @@ def test_hrad_ma_prednost_a_vosk_podle_kraje() -> None:
     assert match_czech_region("Olomoucký kraj").id == "OLK"
 
 
+def test_shared_region_and_stamp_json() -> None:
+    from app.services.czech_regions import CZECH_REGIONS
+    from app.services.stamp_art import DEFAULT_WAX, REGION_WAX, STAMP_PATHS
+
+    assert len(CZECH_REGIONS) == 14
+    assert {row.id for row in CZECH_REGIONS} == set(REGION_WAX)
+    assert "castle" in STAMP_PATHS
+    assert DEFAULT_WAX == "#3d5a40"
+
+
 def test_pas_seskupi_otisky_podle_kraje(session: Session) -> None:
     a = _place(session, "Bouzov", region="Olomoucký kraj")
     b = _place(session, "Šternberk", region="Olomoucký kraj")

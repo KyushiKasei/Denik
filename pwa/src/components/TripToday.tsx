@@ -8,7 +8,7 @@ import { completeTrip, tripStatusLabel } from "../diary/completeTrip";
 import { dateAtNoon } from "../catalog/openingHours";
 import { tripTodayProgress } from "../diary/tripToday";
 import type { StoredTrip } from "../diary/types";
-import { formatVisitDate } from "../diary/timeline";
+import { czechCountWord, formatVisitDate } from "../diary/timeline";
 
 export function TripToday({
   trip,
@@ -52,7 +52,7 @@ export function TripToday({
       }
       setMessage(
         stampMissing
-          ? `Výlet uzavřen (${tripStatusLabel(result.status)}). Doplněno ${result.stamped} razítek.`
+          ? `Výlet uzavřen (${tripStatusLabel(result.status)}). Doplněno ${result.stamped} ${czechCountWord(result.stamped, "razítko", "razítka", "razítek")}.`
           : `Výlet uzavřen (${tripStatusLabel(result.status)}). ${missed.length ? `Vynecháno: ${missed.map((stop) => stop.name).join(", ")}.` : ""}`,
       );
       onStamped();
@@ -98,7 +98,7 @@ export function TripToday({
       </p>
       {progress.allDone ? (
         <p className="notice" role="status">
-          Všechny zastávky mají otisk.
+          Všechny zastávky mají razítko.
           {peopleToday.length ? ` S vámi: ${peopleToday.join(", ")}.` : ""}
         </p>
       ) : progress.next ? (
@@ -180,7 +180,7 @@ export function TripToday({
         </button>
         {missed.length > 0 ? (
           <button type="button" className="ghost" disabled={busy} onClick={() => void closeTrip(true)}>
-            Uzavřít a doražit razítka
+            Uzavřít a dokončit razítka
           </button>
         ) : null}
       </div>

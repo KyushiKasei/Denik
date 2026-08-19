@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import re
+from collections import defaultdict
+
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
@@ -12,16 +15,19 @@ from app.db.models import (
     Place,
     PlaceFieldOverride,
     PlaceJournalState,
+    PlacePhoto,
     TripStop,
     Visit,
     now_iso,
 )
+from app.importers.wikimedia_commons.parser import commons_filename
 from app.services.diary_io import incoming_is_newer
 from app.logging_setup import get_logger
-from app.services.matching import normalize_name
+from app.services.matching import is_locality_alias, normalize_name
 from app.services.places import dump_alternative_names
 
 _log = get_logger()
+_QID_NAME = re.compile(r"^Q\d+$")
 
 _EMPTY_MASTER_FIELDS = (
     "short_name",
@@ -122,6 +128,94 @@ def merge_places(session: Session, winner: Place, loser: Place) -> Place:
     return winner
 
 
+def _photo_merge_winner(places: list[Place]) -> Place:
+    """Vítěz: Wikipedia, víc identit, skutečný název (ne QID), kratší jméno."""
+
+    def key(place: Place) -> tuple:
+        wiki = 1 if (place.wikipedia_url or "").strip() else 0
+        ident = sum(1 for source in place.sources if source.external_id)
+        named = 0 if _QID_NAME.match((place.name or "").strip()) else 1
+        return (wiki, ident, named, -len((place.name or "").strip()), place.created_at or "", -place.id)
+
+    return max(places, key=key)
+
+
+def groups_sharing_commons_photo(session: Session) -> list[list[Place]]:
+    """Aktivní Place propojená stejným souborem Wikimedia Commons (i přes víc fotek)."""
+    rows = session.execute(
+        select(
+            PlacePhoto.place_id,
+            PlacePhoto.original_url,
+            PlacePhoto.source_url,
+            PlacePhoto.thumbnail_url,
+        )
+        .join(Place, Place.id == PlacePhoto.place_id)
+        .where(Place.archived_at.is_(None))
+    ).all()
+    by_file: dict[str, set[int]] = defaultdict(set)
+    for place_id, original, source, thumb in rows:
+        for url in (original, source, thumb):
+            filename = commons_filename(url)
+            if filename:
+                by_file[filename].add(place_id)
+    parent: dict[int, int] = {}
+
+    def find(item: int) -> int:
+        parent.setdefault(item, item)
+        if parent[item] != item:
+            parent[item] = find(parent[item])
+        return parent[item]
+
+    def union(left: int, right: int) -> None:
+        root_left, root_right = find(left), find(right)
+        if root_left != root_right:
+            parent[root_right] = root_left
+
+    for ids in by_file.values():
+        members = list(ids)
+        if len(members) < 2:
+            continue
+        for other in members[1:]:
+            union(members[0], other)
+    buckets: dict[int, list[int]] = defaultdict(list)
+    for place_id in parent:
+        buckets[find(place_id)].append(place_id)
+    groups: list[list[Place]] = []
+    for members in buckets.values():
+        if len(members) < 2:
+            continue
+        places = list(session.scalars(select(Place).where(Place.id.in_(members))).all())
+        places = [place for place in places if place.archived_at is None]
+        if len(places) >= 2:
+            groups.append(places)
+    return groups
+
+
+def merge_places_sharing_photos(session: Session) -> list[tuple[Place, list[Place]]]:
+    """Stejná fotka Commons = stejný objekt. Vítěz si nechá public_id."""
+    merged: list[tuple[Place, list[Place]]] = []
+    for group in groups_sharing_commons_photo(session):
+        winner = _photo_merge_winner(group)
+        losers = [place for place in group if place.id != winner.id]
+        absorbed: list[Place] = []
+        for loser in losers:
+            session.refresh(loser)
+            session.refresh(winner)
+            if loser.archived_at is not None or loser.merged_into_public_id:
+                continue
+            merge_places(session, winner, loser)
+            absorbed.append(loser)
+        if absorbed:
+            session.refresh(winner)
+            merged.append((winner, absorbed))
+            _log.info(
+                "photo-merge winner=%s losers=%s",
+                winner.public_id,
+                [place.public_id for place in absorbed],
+            )
+    return merged
+
+
 def _move_sources(session: Session, winner: Place, loser: Place) -> None:
     winner_keys = {(s.source_type, s.external_id) for s in winner.sources if s.external_id}
     for source in list(loser.sources):
@@ -146,6 +240,8 @@ def _union_alt_names(winner: Place, loser: Place) -> None:
     for name in [loser.name, *loser.alt_names]:
         text = (name or "").strip()
         if not text or text == winner.name or text in seen:
+            continue
+        if _QID_NAME.match(text) or is_locality_alias(text, winner.municipality):
             continue
         seen.add(text)
         merged.append(text)

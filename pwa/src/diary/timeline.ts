@@ -122,7 +122,8 @@ export function diaryHeaderStats(visits: StoredVisit[], states: StoredPlaceState
 export function formatDiaryStatsLine(stats: DiaryHeaderStats): string {
   const visits = czechCountWord(stats.visitCount, "návštěva", "návštěvy", "návštěv");
   const places = czechCountWord(stats.uniquePlaceCount, "místo", "místa", "míst");
-  return `${stats.visitCount} ${visits} · ${stats.uniquePlaceCount} ${places} · ${stats.favoriteCount} oblíbené`;
+  const favs = czechCountWord(stats.favoriteCount, "oblíbené", "oblíbená", "oblíbených");
+  return `${stats.visitCount} ${visits} · ${stats.uniquePlaceCount} ${places} · ${stats.favoriteCount} ${favs}`;
 }
 
 export function resolvePlaceRef(

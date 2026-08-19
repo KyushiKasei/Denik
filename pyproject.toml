@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pamatky-denik"
-version = "0.1.0"
+version = "0.2.0"
 description = "Lokální katalog historických míst a cestovatelský deník"
 requires-python = ">=3.12"
 dependencies = [
@@ -24,6 +24,8 @@ dependencies = [
 dev = [
     "pytest>=8.3.0",
     "httpx>=0.27.0",
+    "ruff>=0.11.0",
+    "mypy>=1.13.0",
 ]
 
 [tool.setuptools.packages.find]
@@ -35,3 +37,37 @@ app = ["web/templates/**/*.html", "web/static/**/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["pc-app/tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+src = ["pc-app"]
+extend-exclude = ["pc-app/app/web/static/vendor"]
+
+[tool.ruff.lint]
+select = ["E", "F", "B"]
+ignore = [
+    "E501",
+    "B008",
+]
+
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "pc-app"
+packages = ["app"]
+ignore_missing_imports = true
+check_untyped_defs = false
+warn_unused_ignores = false
+explicit_package_bases = true
+disable_error_code = [
+    "assignment",
+    "arg-type",
+    "return-value",
+    "union-attr",
+    "attr-defined",
+    "override",
+    "call-overload",
+    "index",
+    "dict-item",
+    "misc",
+]

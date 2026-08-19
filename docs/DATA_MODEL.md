@@ -25,7 +25,7 @@ Master záznam památky. `public_id` je neměnný UUIDv7. Integer `id` se do JSO
 
 M:N na typy přes `place_place_types`. Řádky se nemažou — archivace nastaví `archived_at`.
 
-České popisky číselníků (`condition`, `visitability`, `quality_status`, `heritage_status`, `source_types`) jsou v `shared/enums.json`.
+České popisky číselníků (`condition`, `visitability`, `quality_status`, `heritage_status`, `source_types`) jsou v `shared/enums.json`. Siluety razítek a vosk krajů: `shared/stamp-art.json`. Mapa krajů: `shared/czech-regions.json`.
 
 ## Zdroje a ochrana ID
 

@@ -19,25 +19,37 @@ Stejný konkrétní název, kompatibilní typy a GPS do 300&nbsp;m se sloučí s
 
 {% if reviews %}
 <div class="table-wrap">
-<table>
+<table class="reviews-table">
   <thead>
     <tr>
       <th>Zdroj</th>
-      <th>Externí ID</th>
-      <th>Důvod</th>
-      <th>Kandidát</th>
+      <th>Z importu</th>
+      <th>Proč čeká</th>
+      <th>Kandidát v katalogu</th>
       <th>Stav</th>
     </tr>
   </thead>
   <tbody>
     {% for review in reviews %}
+    {% set incoming = incoming_review_label(review.raw_data) %}
+    {% set candidate_name = display_place_name(review.candidate_place.name) if review.candidate_place else "" %}
+    {% set candidate_muni = review.candidate_place.municipality if review.candidate_place else "" %}
+    {% set candidate_label = candidate_name ~ (" (" ~ candidate_muni ~ ")" if candidate_muni and candidate_muni|lower not in candidate_name|lower else "") %}
     <tr>
-      <td>{{ enum_label("source_types", review.source_type) }}</td>
-      <td><a href="/import/reviews/{{ review.id }}"><code>{{ review.external_id or "—" }}</code></a></td>
-      <td>{{ review.match_reason }}</td>
+      <td>
+        <a href="/import/reviews/{{ review.id }}">{{ enum_label("source_types", review.source_type) }}</a>
+        <div class="muted"><code>{{ review.external_id or "—" }}</code></div>
+      </td>
+      <td class="cell-clip" title="{{ incoming }}">{{ incoming }}</td>
+      <td class="review-reason">{{ explain_match_reason(review.match_reason, review.candidates|length) }}</td>
       <td>
         {% if review.candidate_place %}
-        <a href="/places/{{ review.candidate_place.public_id }}">{{ review.candidate_place.name }}</a>
+        <div class="candidate-cell">
+        <a href="/places/{{ review.candidate_place.public_id }}" title="{{ candidate_label }}">{{ candidate_label }}</a>
+        {% if review.candidates|length > 1 %}
+        <span class="muted">+{{ review.candidates|length - 1 }}</span>
+        {% endif %}
+        </div>
         {% else %}—{% endif %}
       </td>
       <td>{{ import_code_label("review_status", review.status) }}</td>

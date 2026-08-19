@@ -13,20 +13,21 @@
 
 Skript vytvoří `.venv`, nainstaluje balíček a spustí Uvicorn na `http://127.0.0.1:8765`.
 
-- `/` — dashboard nad katalogem i deníkem (počty návštěv), export `catalog.json` / `diary.json`, import deníku, složka pro telefon, volitelná domácí Wi-Fi
+- `/` — dashboard nad katalogem i deníkem (počty návštěv)
 - `/places` — seznam, hledání, filtry včetně navštíveno / chci navštívit, stránkování, export `catalog.json`
 - `/places/{id}` — detail místa: zápis návštěv a osobního stavu deníku (stejná pole jako PWA)
 - `/visits` — seznam návštěv
 - `/trips` — výlety (seřazené zastávky, vzdušná km); stejný zápis jako v `diary.json`
 - `/nearby` — Poblíž: GPS / obec nebo název / souřadnice, šoupátko km, Leaflet + seznam
 - `/places/new` — nové místo
-- `/import` — Import centrum (Wikidata, Památkový katalog, RÚIAN, NPÚ, Commons, Wikipedia, volitelné OSM, fixture)
+- `/exchange` — Výměna dat: export `catalog.json` / `diary.json`, import deníku, složka pro telefon, volitelná domácí Wi-Fi
+- `/import` — Import památek (Wikidata, Památkový katalog, RÚIAN, NPÚ, Commons, Wikipedia, volitelné OSM, fixture)
 - `/import/reviews` — fronta nejasných shod; tlačítko přepočítá otevřené položky podle aktuálních pravidel B (se zálohou)
 - `/backup` — ruční záloha a obnova SQLite
 
-Domácí relace (výchozí vypnuto): na přehledu „Povolit domácí síť na 15 min“. Druhý listener na `0.0.0.0:8766` má jen `/lan` (PIN, upload deníku, stažení sloučeného `diary.zip` a `catalog.json`). QR otevře Safari, nespáruje PWA. Admin UI na `127.0.0.1:8765` se na LAN neotevře. Windows firewall: povolit jen soukromé sítě. Guest Wi-Fi s izolací klientů telefon k PC nepustí.
+Domácí relace (výchozí vypnuto): v Administraci → Výměna dat „Povolit domácí síť na 15 min“. Druhý listener na `0.0.0.0:8766` má jen `/lan` (PIN, upload deníku, stažení sloučeného `diary.zip` a `catalog.json`). QR otevře Safari, nespáruje PWA. Admin UI na `127.0.0.1:8765` se na LAN neotevře. Windows firewall: povolit jen soukromé sítě. Guest Wi-Fi s izolací klientů telefon k PC nepustí.
 
-Složka pro telefon (Dropbox / USB, ne živá SQLite): na přehledu jednou uložíte cestu. Telefon sem dá `diary.zip` nebo `diary.json`, tlačítko „Sloučit deník ze složky“ zapíše `diary-z-pc.zip`. Katalog jen na vyžádání jako `catalog.json`. Není to Dropbox API ani sledování složky.
+Složka pro telefon (Dropbox / USB, ne živá SQLite): v Administraci → Výměna dat jednou uložíte cestu. Telefon sem dá `diary.zip` nebo `diary.json`, tlačítko „Sloučit deník ze složky“ zapíše `diary-z-pc.zip`. Katalog jen na vyžádání jako `catalog.json`. Není to Dropbox API ani sledování složky.
 
 Export z příkazové řádky:
 
@@ -121,6 +122,15 @@ Testy používají dočasnou SQLite, ne LocalAppData.
 ```powershell
 cd pwa
 npm test
+```
+
+Lintery (volitelné, `pip install -e ".[dev]"` a v `pwa/` `npm install`):
+
+```powershell
+.\.venv\Scripts\python -m ruff check pc-app
+.\.venv\Scripts\python -m mypy
+cd pwa
+npm run lint
 ```
 
 ## Akceptační scénář MVP (kapitola 32)

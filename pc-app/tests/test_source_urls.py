@@ -40,3 +40,8 @@ def test_photo_display_url_prefers_thumbnail() -> None:
     assert photo_display_url(None) is None
     missing = SimpleNamespace(thumbnail_url=None, original_url=None, source_url="javascript:alert(1)")
     assert photo_display_url(missing) is None
+    as_dict = {
+        "thumbnail_url": "https://commons.wikimedia.org/wiki/Special:FilePath/X.jpg?width=640",
+        "original_url": "https://commons.wikimedia.org/wiki/File:X.jpg",
+    }
+    assert photo_display_url(as_dict) == as_dict["thumbnail_url"]

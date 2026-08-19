@@ -25,8 +25,40 @@ def _phone_dir(tmp_path: Path) -> Path:
     return folder
 
 
+def test_admin_nav_has_subtabs(client):
+    home = client.get("/")
+    assert home.status_code == 200
+    home_nav = home.text.split("<main", 1)[0]
+    assert "Administrace" in home_nav
+    assert 'href="/exchange"' in home_nav
+    assert "admin-subnav" not in home_nav
+    assert "Import památek" not in home_nav
+    assert home_nav.find("/nearby") < home_nav.find("/exchange")
+
+    exchange = client.get("/exchange")
+    assert exchange.status_code == 200
+    assert "admin-subnav" in exchange.text
+    assert "Výměna dat" in exchange.text
+    assert "Import památek" in exchange.text
+    assert "Exportovat catalog.json" in exchange.text
+
+    imported = client.get("/import")
+    assert imported.status_code == 200
+    assert "Import centrum" in imported.text
+    assert "Import památek" in imported.text
+    assert "admin-subnav" in imported.text
+
+    backup = client.get("/backup")
+    assert backup.status_code == 200
+    assert "admin-subnav" in backup.text
+    assert "Vytvořit zálohu teď" in backup.text
+
+
 def test_dashboard_shows_exchange_panel(client):
-    page = client.get("/")
+    home = client.get("/")
+    assert home.status_code == 200
+    assert "Složka pro telefon" not in home.text
+    page = client.get("/exchange")
     assert page.status_code == 200
     assert "Složka pro telefon" in page.text
     assert "QR otevře Safari, nespáruje PWA" in page.text

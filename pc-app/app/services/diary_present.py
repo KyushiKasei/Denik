@@ -493,9 +493,7 @@ def trip_today_progress(
         )
     next_stop = next((stop for stop in stops if not stop.done), None)
     known_km: list[float] = []
-    for index, stop in enumerate(stops):
-        if index == 0:
-            continue
+    for index in range(1, len(stops)):
         previous = trip.stops[index - 1].place
         current = trip.stops[index].place
         if previous is None or current is None:

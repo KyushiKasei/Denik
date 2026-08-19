@@ -19,7 +19,7 @@ PC (Python, SQLite)          ← jediný zdroj pravdy katalogu
          stejné diary.zip / catalog.json, ne editor katalogu
 ```
 
-Dropbox / USB je doprava souborů, když nejste na stejné Wi-Fi. Na PC lze jednou nastavit **složku pro telefon** (typicky Dropbox): telefon tam uloží `diary.zip`, tlačítko na přehledu deník sloučí a zapíše `diary-z-pc.zip`. Není to Dropbox API. Na domácí síti může PC na 15 minut otevřít jen stránku sloučení (`http://<LAN-IP>:8766/lan`). Nainstalovaná PWA (HTTPS) na tuto adresu sama nesahá — telefon otevře Safari (to **není** PWA na ploše), nahraje export a stáhne sloučený zip. Netlify je jen doručení prázdného HTML app shellu na iPhone ([Netlify Drop](https://app.netlify.com/drop)). Katalog a deník se na Netlify **nenahrávají**.
+Dropbox / USB je doprava souborů, když nejste na stejné Wi-Fi. Na PC lze jednou nastavit **složku pro telefon** (typicky Dropbox) v Administraci → Výměna dat: telefon tam uloží `diary.zip`, tlačítko deník sloučí a zapíše `diary-z-pc.zip`. Není to Dropbox API. Na domácí síti může PC na 15 minut otevřít jen stránku sloučení (`http://<LAN-IP>:8766/lan`). Nainstalovaná PWA (HTTPS) na tuto adresu sama nesahá — telefon otevře Safari (to **není** PWA na ploše), nahraje export a stáhne sloučený zip. Netlify je jen doručení prázdného HTML app shellu na iPhone ([Netlify Drop](https://app.netlify.com/drop)). Katalog a deník se na Netlify **nenahrávají**.
 
 ## Zdroj pravdy
 

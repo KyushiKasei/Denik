@@ -1507,17 +1507,109 @@ input[type="range"] {
 
 .photo-intake {
   margin: 1.4rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.photo-intake-list {
+  overflow: hidden;
+  margin: 0;
+}
+
+.photo-intake-list li {
+  padding: 0.75rem 0.9rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.photo-intake-list li:last-child {
+  border-bottom: 0;
 }
 
 .photo-intake-row {
   display: flex;
-  gap: 0.6rem;
+  gap: 0.7rem;
   align-items: flex-start;
 }
 
-.photo-intake-row span {
+.photo-intake-copy {
   display: flex;
   flex-direction: column;
+  gap: 0.45rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.photo-intake-copy > label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.photo-intake-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.photo-intake-hits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.photo-intake-hits button {
+  width: 100%;
+  justify-content: flex-start;
+  min-height: 2.4rem;
+  font-weight: 550;
+}
+
+.photo-intake .file-picker {
+  margin: 0;
+}
+
+.photo-intake-apply {
+  align-self: stretch;
+  margin: 0;
+}
+
+.photo-intake-visit {
+  margin: 0.15rem 0 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.photo-intake-visit legend {
+  padding: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.photo-intake-choice {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+  margin: 0;
+}
+
+.photo-intake-choice > span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+  min-width: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
 }
 
 .hours-badge.is-soon {

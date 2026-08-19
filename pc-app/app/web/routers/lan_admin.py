@@ -1,4 +1,4 @@
-"""Zapnutí a vypnutí domácí relace z localhost dashboardu."""
+"""Zapnutí a vypnutí domácí relace z localhost Administrace."""
 
 from __future__ import annotations
 
@@ -17,14 +17,14 @@ def lan_enable() -> RedirectResponse:
     try:
         start_lan_session(listen=True)
     except LanListenError:
-        return RedirectResponse("/?notice=lan_listen_error", status_code=HTTP_303_SEE_OTHER)
-    return RedirectResponse("/?notice=lan_enabled", status_code=HTTP_303_SEE_OTHER)
+        return RedirectResponse("/exchange?notice=lan_listen_error", status_code=HTTP_303_SEE_OTHER)
+    return RedirectResponse("/exchange?notice=lan_enabled", status_code=HTTP_303_SEE_OTHER)
 
 
 @router.post("/lan/disable")
 def lan_disable() -> RedirectResponse:
     stop_lan_session()
-    return RedirectResponse("/?notice=lan_disabled", status_code=HTTP_303_SEE_OTHER)
+    return RedirectResponse("/exchange?notice=lan_disabled", status_code=HTTP_303_SEE_OTHER)
 
 
 @router.get("/lan/status", response_class=HTMLResponse)

@@ -181,6 +181,15 @@ test("header statistika počítá návštěvy, unikátní místa a oblíbené", 
   );
   expect(stats).toEqual({ visitCount: 3, uniquePlaceCount: 2, favoriteCount: 1 });
   expect(formatDiaryStatsLine(stats)).toBe("3 návštěvy · 2 místa · 1 oblíbené");
+  expect(formatDiaryStatsLine({ visitCount: 0, uniquePlaceCount: 0, favoriteCount: 0 })).toBe(
+    "0 návštěv · 0 míst · 0 oblíbených",
+  );
+  expect(formatDiaryStatsLine({ visitCount: 1, uniquePlaceCount: 1, favoriteCount: 2 })).toBe(
+    "1 návštěva · 1 místo · 2 oblíbená",
+  );
+  expect(formatDiaryStatsLine({ visitCount: 5, uniquePlaceCount: 5, favoriteCount: 5 })).toBe(
+    "5 návštěv · 5 míst · 5 oblíbených",
+  );
 });
 
 test("datumy mají český tvar a obec se u názvu neopakuje", () => {

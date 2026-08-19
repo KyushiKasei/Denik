@@ -1,6 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Památky">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="PamÃ¡tky">
   <rect width="512" height="512" rx="96" fill="#3d5a40"/>
-  <path fill="#f6f3ee" d="M88 412V236h36v-72h56v72h38V148h76v88h38v-72h56v72h36v176H88zm148 0v-88h40v88h-40z"/>
-  <rect x="168" y="268" width="28" height="28" fill="#3d5a40"/>
-  <rect x="316" y="268" width="28" height="28" fill="#3d5a40"/>
+  <path fill="#f6f3ee" d="M96 384V236L152 168l56 68v40h-12V148h-22v-28h48v28h14V120h56v28h14V120h48v28h-22v136h-12v-40l56-68 56 68v148H304v-12c0-38-18-60-48-60s-48 22-48 60v12H96z"/>
+  <path fill="#3d5a40" d="M130 250c0-4 3-8 8-8h20c5 0 8 4 8 8v28c0 10-8 18-18 18s-18-8-18-18v-28zm114-58c0-4 3-8 8-8h20c5 0 8 4 8 8v24c0 10-8 18-18 18s-18-8-18-18v-24zm110 58c0-4 3-8 8-8h20c5 0 8 4 8 8v28c0 10-8 18-18 18s-18-8-18-18v-28z"/>
+  <g fill="#c9a227">
+    <rect x="232" y="318" width="6" height="46" rx="1"/>
+    <rect x="246" y="314" width="6" height="50" rx="1"/>
+    <rect x="260" y="314" width="6" height="50" rx="1"/>
+    <rect x="274" y="318" width="6" height="46" rx="1"/>
+    <rect x="228" y="332" width="56" height="5" rx="1"/>
+    <rect x="228" y="348" width="56" height="5" rx="1"/>
+  </g>
 </svg>

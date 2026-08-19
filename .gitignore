@@ -13,6 +13,7 @@ build/
 *.sqlite3-shm
 data/
 _Zadani/catalog.json
+_Denik/
 .env
 .DS_Store
 node_modules/

@@ -99,7 +99,7 @@ Soubor master katalogu. Osobní deník v něm není. Archivovaná místa se neex
 7. Uložit `catalog_version`.
 8. Návštěvy, jejichž `place_id` v novém katalogu chybí, zůstanou a v UI se označí jako „místo už není v katalogu“.
 
-PC export: tlačítko na přehledu / v katalogu, nebo `python -m app.cli export-catalog`. Výchozí cesta: `<data_dir>/export/catalog.json`.
+PC export: tlačítko v Administraci → Výměna dat / v katalogu, nebo `python -m app.cli export-catalog`. Výchozí cesta: `<data_dir>/export/catalog.json`.
 
 ---
 

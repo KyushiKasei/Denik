@@ -43,7 +43,13 @@ async def lifespan(_app: FastAPI):
     stop_lan_session()
 
 
-app = FastAPI(title="Památky — katalog", lifespan=lifespan)
+app = FastAPI(
+    title="Památky — katalog",
+    lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 app.include_router(catalog_router)
 app.include_router(trips_router)

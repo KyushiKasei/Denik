@@ -9,8 +9,10 @@ const EXIF_IFD = 0x8769;
 const DATETIME_ORIGINAL = 0x9003;
 const GPS_LAT_REF = 0x0001;
 const GPS_LAT = 0x0002;
-const GPS_LON_REF = 0x0004;
-const GPS_LON = 0x0005;
+const GPS_LON_REF = 0x0003;
+const GPS_LON = 0x0004;
+const RATIONAL = 5;
+const SRATIONAL = 10;
 
 function readU16(view: DataView, offset: number, le: boolean): number {
   return view.getUint16(offset, le);
@@ -120,12 +122,19 @@ function asciiValue(view: DataView, entry: IfdEntry, tiffStart: number, le: bool
   return String.fromCharCode(...chars).replace(/\0+$/, "").trim();
 }
 
-function rational(view: DataView, tiffStart: number, offset: number, index: number, le: boolean): number | null {
+function rational(
+  view: DataView,
+  tiffStart: number,
+  offset: number,
+  index: number,
+  le: boolean,
+  signed: boolean,
+): number | null {
   const at = tiffStart + offset + index * 8;
   if (at + 8 > view.byteLength) {
     return null;
   }
-  const num = readU32(view, at, le);
+  const num = signed ? view.getInt32(at, le) : readU32(view, at, le);
   const den = readU32(view, at + 4, le);
   if (den === 0) {
     return null;
@@ -134,9 +143,10 @@ function rational(view: DataView, tiffStart: number, offset: number, index: numb
 }
 
 function dmsToDeg(view: DataView, entry: IfdEntry, tiffStart: number, le: boolean): number | null {
-  const deg = rational(view, tiffStart, entry.valueOffset, 0, le);
-  const min = rational(view, tiffStart, entry.valueOffset, 1, le);
-  const sec = rational(view, tiffStart, entry.valueOffset, 2, le);
+  const signed = entry.type === SRATIONAL;
+  const deg = rational(view, tiffStart, entry.valueOffset, 0, le, signed);
+  const min = rational(view, tiffStart, entry.valueOffset, 1, le, signed);
+  const sec = rational(view, tiffStart, entry.valueOffset, 2, le, signed);
   if (deg == null || min == null || sec == null) {
     return null;
   }
@@ -193,10 +203,10 @@ export function parseJpegExif(buffer: ArrayBuffer): PhotoExif {
       if (entry.tag === GPS_LON_REF) {
         lonRef = asciiValue(view, entry, 0, le) || lonRef;
       }
-      if (entry.tag === GPS_LAT) {
+      if (entry.tag === GPS_LAT && (entry.type === RATIONAL || entry.type === SRATIONAL)) {
         latitude = dmsToDeg(view, entry, 0, le);
       }
-      if (entry.tag === GPS_LON) {
+      if (entry.tag === GPS_LON && (entry.type === RATIONAL || entry.type === SRATIONAL)) {
         longitude = dmsToDeg(view, entry, 0, le);
       }
     }

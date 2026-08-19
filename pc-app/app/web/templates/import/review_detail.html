@@ -1,51 +1,162 @@
 {% extends "base.html" %}
 {% block title %}Ke kontrole {{ review.id }} — Památky{% endblock %}
+{% block extra_head %}
+<link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
+<script src="/static/vendor/leaflet/leaflet.js"></script>
+<script src="/static/review-map.js" defer></script>
+{% endblock %}
 {% block content %}
-<h1>Importovaný objekt</h1>
+{% set incoming_photo = photo_display_url(record.image) %}
+<h1>Porovnání k rozhodnutí</h1>
 <p class="muted">{{ enum_label("source_types", review.source_type) }} / <code>{{ review.external_id or "—" }}</code> · {{ import_code_label("review_status", review.status) }}</p>
+<p>{{ explain_match_reason(review.match_reason, review.candidates|length) }}</p>
+{% if review.match_reason %}
+<p class="muted">{{ review.match_reason }}</p>
+{% endif %}
 
+<div class="review-compare">
 <section class="review-card">
-  <h2>{{ record.name }}</h2>
+  <p class="muted review-eyebrow">Z importu — ještě není v katalogu</p>
+  <div class="review-heading">
+    <h2>{{ record.name }}</h2>
+  </div>
+  <div class="review-photo-slot">
+    {% if incoming_photo %}
+    <img src="{{ incoming_photo }}" alt="{{ record.name }}">
+    {% endif %}
+  </div>
+  {% if record.image and (record.image.attribution or record.image.license) %}
+  <p class="muted">{{ record.image.attribution or "" }}{% if record.image.attribution and record.image.license %} · {% endif %}{{ record.image.license or "" }}</p>
+  {% endif %}
+  {% if record.short_description %}
+  <p>{{ record.short_description }}</p>
+  {% endif %}
+  {% if incoming_is_sparse(record) %}
+  <p class="muted">Z tohoto zdroje je málo údajů (typicky název a GPS). Rozhodnutí opřete o mapu a odkazy na zdroj — 150–200&nbsp;m ve městě často znamená dvě různé budovy.</p>
+  {% endif %}
   <dl class="detail-grid">
-    <dt>Typy</dt><dd>{{ (record.types or []) | join(", ") or "—" }}</dd>
+    <dt>Typy</dt><dd>{{ format_types(record.types or []) }}</dd>
+    {% if record.alternative_names %}
+    <dt>Další názvy</dt><dd>{{ record.alternative_names | join(", ") }}</dd>
+    {% endif %}
+    <dt>Adresa</dt><dd>{{ record.address or "—" }}</dd>
     <dt>Obec</dt><dd>{{ record.municipality or "—" }}</dd>
     <dt>Okres</dt><dd>{{ record.district or "—" }}</dd>
     <dt>GPS</dt>
-    <dd>{% if record.latitude is not none %}{{ record.latitude }}, {{ record.longitude }}{% else %}chybí{% endif %}</dd>
-    <dt>Důvod</dt><dd>{{ review.match_reason }}</dd>
+    <dd>
+      {% if record.latitude is not none %}
+        {{ record.latitude }}, {{ record.longitude }}
+        · <a href="https://mapy.cz/zakladni?q={{ record.latitude }},{{ record.longitude }}" target="_blank" rel="noopener">Mapy.cz</a>
+        · <a href="https://www.google.com/maps?q={{ record.latitude }},{{ record.longitude }}" target="_blank" rel="noopener">Google Maps</a>
+      {% else %}chybí{% endif %}
+    </dd>
+    {% if record.wikipedia_url and is_http_url(record.wikipedia_url) %}
+    <dt>Wikipedia</dt><dd><a href="{{ record.wikipedia_url }}" target="_blank" rel="noopener">{{ record.wikipedia_url }}</a></dd>
+    {% endif %}
+    {% if record.official_website and is_http_url(record.official_website) %}
+    <dt>Web</dt><dd><a href="{{ record.official_website }}" target="_blank" rel="noopener">{{ record.official_website }}</a></dd>
+    {% endif %}
+    {% if record.source_url and is_http_url(record.source_url) %}
+    <dt>Zdroj</dt><dd><a href="{{ record.source_url }}" target="_blank" rel="noopener">{{ record.source_url }}</a></dd>
+    {% endif %}
+    <dt>Externí ID</dt>
+    <dd>
+      {% for source_type, external_id in (record.external_ids or {}).items() %}
+        {% set id_url = identity_source_url(source_type, external_id) %}
+        {% if id_url %}
+        <a href="{{ id_url }}" target="_blank" rel="noopener">{{ source_type }} {{ external_id }}</a>{% if not loop.last %} · {% endif %}
+        {% else %}
+        {{ source_type }} {{ external_id }}{% if not loop.last %} · {% endif %}
+        {% endif %}
+      {% else %}
+        {{ review.external_id or "—" }}
+      {% endfor %}
+    </dd>
+    {% if record.heritage_status %}
+    <dt>Ochrana</dt><dd>{{ enum_label("heritage_status", record.heritage_status) }}</dd>
+    {% endif %}
   </dl>
 </section>
 
-<h2>Možná existující památka</h2>
-{% if review.candidates %}
-{% for candidate in review.candidates %}
-<article class="review-card">
-  <h3>
-    <a href="/places/{{ candidate.place.public_id }}">{{ candidate.place.name }}</a>
-    <span class="badge">skóre {{ "%.2f"|format(candidate.score or 0) }}</span>
-  </h3>
-  <p class="public-id">Interní ID: <code>{{ candidate.place.public_id }}</code></p>
-  <dl class="detail-grid">
-    <dt>Obec</dt><dd>{{ candidate.place.municipality or "—" }}</dd>
-    <dt>Okres</dt><dd>{{ candidate.place.district or "—" }}</dd>
-    <dt>GPS</dt>
-    <dd>
-      {% if candidate.place.has_gps %}
-        {{ candidate.place.latitude }}, {{ candidate.place.longitude }}
-      {% else %}chybí{% endif %}
-    </dd>
-    <dt>Důvod</dt><dd>{{ candidate.reason }}</dd>
-  </dl>
-  {% if review.status == "open" %}
-  <form method="post" action="/import/reviews/{{ review.id }}/merge">
-    <input type="hidden" name="place_id" value="{{ candidate.place.id }}">
-    <button type="submit">Sloučit</button>
-  </form>
+<div>
+  {% if review.candidates %}
+  {% for candidate in review.candidates %}
+  {% set cand_photo = photo_display_url(candidate.place.primary_photo) %}
+  {% set dist_label = format_distance_m(record.latitude, record.longitude, candidate.place.latitude, candidate.place.longitude) %}
+  {% set conflicts = identity_conflicts(record, candidate.place) %}
+  <section class="review-card">
+    <p class="muted review-eyebrow">Už v katalogu{% if dist_label %} · {{ dist_label }}{% endif %}</p>
+    <div class="review-heading">
+      <h2><a href="/places/{{ candidate.place.public_id }}">{{ candidate.place.name | display_place_name }}</a></h2>
+    </div>
+    <div class="review-photo-slot">
+      {% if cand_photo %}
+      <img src="{{ cand_photo }}" alt="{{ candidate.place.name }}">
+      {% endif %}
+    </div>
+    {% if conflicts %}
+    <p class="notice">Různé identity: {{ conflicts | join("; ") }}. Téměř jistě dvě místa — spíš založit jako nové.</p>
+    {% endif %}
+    {% if candidate.place.short_description %}
+    <p>{{ candidate.place.short_description }}</p>
+    {% endif %}
+    <dl class="detail-grid">
+      <dt>Typy</dt><dd>{{ candidate.place.types_cs }}</dd>
+      {% if candidate.place.alt_names %}
+      <dt>Další názvy</dt><dd>{{ candidate.place.alt_names | join(", ") }}</dd>
+      {% endif %}
+      <dt>Adresa</dt><dd>{{ candidate.place.address or "—" }}</dd>
+      <dt>Obec</dt><dd>{{ candidate.place.municipality or "—" }}</dd>
+      <dt>Okres</dt><dd>{{ candidate.place.district or "—" }}</dd>
+      <dt>GPS</dt>
+      <dd>
+        {% if candidate.place.has_gps %}
+          {{ candidate.place.latitude }}, {{ candidate.place.longitude }}
+          · <a href="https://mapy.cz/zakladni?q={{ candidate.place.latitude }},{{ candidate.place.longitude }}" target="_blank" rel="noopener">Mapy.cz</a>
+          · <a href="https://www.google.com/maps?q={{ candidate.place.latitude }},{{ candidate.place.longitude }}" target="_blank" rel="noopener">Google Maps</a>
+        {% else %}chybí{% endif %}
+      </dd>
+      {% if candidate.place.wikipedia_url and is_http_url(candidate.place.wikipedia_url) %}
+      <dt>Wikipedia</dt><dd><a href="{{ candidate.place.wikipedia_url }}" target="_blank" rel="noopener">{{ candidate.place.wikipedia_url }}</a></dd>
+      {% endif %}
+      {% if candidate.place.official_website and is_http_url(candidate.place.official_website) %}
+      <dt>Web</dt><dd><a href="{{ candidate.place.official_website }}" target="_blank" rel="noopener">{{ candidate.place.official_website }}</a></dd>
+      {% endif %}
+      {% if candidate.place.sources %}
+      <dt>Zdroje</dt>
+      <dd>
+        {% for source in candidate.place.sources %}
+          {% set src_url = source_page_url(source) %}
+          {% if src_url %}
+          <a href="{{ src_url }}" target="_blank" rel="noopener">{{ enum_label("source_types", source.source_type) }}</a>{% if not loop.last %} · {% endif %}
+          {% else %}
+          {{ enum_label("source_types", source.source_type) }}{% if not loop.last %} · {% endif %}
+          {% endif %}
+        {% endfor %}
+      </dd>
+      {% endif %}
+    </dl>
+    {% if review.status == "open" %}
+    <form method="post" action="/import/reviews/{{ review.id }}/merge">
+      <input type="hidden" name="place_id" value="{{ candidate.place.id }}">
+      <button type="submit">Sloučit s tímto místem</button>
+    </form>
+    {% endif %}
+  </section>
+  {% endfor %}
+  {% else %}
+  <section class="review-card">
+    <p class="muted review-eyebrow">Už v katalogu</p>
+    <p class="muted">Žádný kandidát.</p>
+  </section>
   {% endif %}
-</article>
-{% endfor %}
-{% else %}
-<p class="muted">Žádný kandidát v katalogu.</p>
+</div>
+</div>
+
+{% if map_points_json and map_points_json != "[]" %}
+<h2>Mapa</h2>
+<p class="muted">Zelený bod je import, oranžový už je v katalogu. Ve městě 150–200&nbsp;m často nejsou tatáž budova.</p>
+<div id="review-map" class="nearby-map review-map" data-points="{{ map_points_json }}"></div>
 {% endif %}
 
 {% if review.status == "open" %}

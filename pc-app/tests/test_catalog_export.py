@@ -229,9 +229,9 @@ def test_image_and_missing_gps_export(session: Session, tmp_path: Path) -> None:
 def test_ui_has_export_button_and_downloads_catalog(client) -> None:
     created = client.post("/places", data=_form_payload(), follow_redirects=False)
     assert created.status_code == 303
-    dashboard = client.get("/")
-    assert dashboard.status_code == 200
-    assert "Exportovat catalog.json" in dashboard.text
+    exchange = client.get("/exchange")
+    assert exchange.status_code == 200
+    assert "Exportovat catalog.json" in exchange.text
     listing = client.get("/places")
     assert "Exportovat catalog.json" in listing.text
 

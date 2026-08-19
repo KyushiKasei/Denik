@@ -46,9 +46,9 @@ Pořadí je pevné. První úspěšná úroveň vyhraje. Při více různých Pl
 
 ### A — `MATCHED_EXACT`
 
-Shoda, pokud existuje `place_sources` se stejným `(source_type, external_id)`, nebo jakýmkoli ID z `external_ids` proti už uloženému zdroji (Wikidata QID, katalogové číslo, ÚSKP, OSM ref).
+Shoda, pokud existuje `place_sources` se stejným `(source_type, external_id)`, nebo jakýmkoli ID z `external_ids` proti už uloženému zdroji (Wikidata QID, katalogové číslo, ÚSKP, OSM ref), **nebo stejný soubor Wikimedia Commons na `place_photos`**.
 
-Výsledek: aktualizuj existující Place, **nikdy** negeneruj `public_id`. Nově viditelná externí ID se připojí k témuž Place.
+Výsledek: aktualizuj existující Place, **nikdy** negeneruj `public_id`. Nově viditelná externí ID se připojí k témuž Place. Stejný soubor Wikimedia Commons na víc aktivních Place = stejný objekt: sloučí se (vítěz je místo s Wikipedií / víc identit, `public_id` vítěze zůstane).
 
 ### B — `MATCHED_PROBABLE` (automaticky jen při tvrdé shodě)
 

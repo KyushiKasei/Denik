@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from collections import Counter
 from pathlib import Path
 
@@ -36,12 +37,14 @@ from app.services.import_job import (
 )
 from app.services.import_progress import load_preview_page, read_progress
 from app.services.matching import LEVEL_FILTER_OPTIONS, PREVIEW_OUTCOME_LIMIT, normalize_level_filter
+from app.logging_setup import get_logger
 from app.services.overrides import FIELD_LABELS_CS, keep_master, take_source
 from app.services.places import get_place_by_public_id
 from app.services.values import decode_value
 from app.web.templating import templates
 
 router = APIRouter()
+_log = get_logger()
 
 NOTICES = {
     "preview": "Náhled je hotový. Data se ještě nezapsala.",
@@ -60,6 +63,8 @@ NOTICES = {
     "already_running": "Import už běží. Počkejte na dokončení.",
     "reprocess_running": "Přepočet fronty běží. Jisté položky se sloučí automaticky, OSM identita se připojí.",
     "reprocess_applied": "Fronta byla přepočtena. Jisté shody se sloučily, zbytek zůstal k rozhodnutí.",
+    "merge_failed": "Sloučení selhalo. Podrobnosti jsou v logu. Zkuste to znovu.",
+    "create_failed": "Nelze založit nové místo: toto externí ID už patří existujícímu místu. Sloučte ho tam, nebo položku ignorujte.",
 }
 
 
@@ -366,6 +371,49 @@ def review_reprocess(request: Request, background_tasks: BackgroundTasks):
     return RedirectResponse("/import/reviews?notice=reprocess_running", status_code=HTTP_303_SEE_OTHER)
 
 
+def _as_latlon(lat: object, lon: object) -> tuple[float, float] | None:
+    try:
+        lat_f = float(lat)  # type: ignore[arg-type]
+        lon_f = float(lon)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    if not (math.isfinite(lat_f) and math.isfinite(lon_f)):
+        return None
+    if not (-90.0 <= lat_f <= 90.0 and -180.0 <= lon_f <= 180.0):
+        return None
+    return lat_f, lon_f
+
+
+def _review_map_points(record: dict, review: ImportReview) -> list[dict]:
+    points: list[dict] = []
+    incoming = _as_latlon(record.get("latitude"), record.get("longitude"))
+    if incoming is not None:
+        points.append(
+            {
+                "lat": incoming[0],
+                "lon": incoming[1],
+                "label": str(record.get("name") or "Import"),
+                "kind": "incoming",
+            }
+        )
+    for candidate in review.candidates:
+        place = candidate.place
+        if place is None or not place.has_gps:
+            continue
+        coords = _as_latlon(place.latitude, place.longitude)
+        if coords is None:
+            continue
+        points.append(
+            {
+                "lat": coords[0],
+                "lon": coords[1],
+                "label": place.name,
+                "kind": "candidate",
+            }
+        )
+    return points
+
+
 @router.get("/import/reviews/{review_id}", response_class=HTMLResponse)
 def review_detail(request: Request, review_id: int, session: Session = Depends(db_session)) -> HTMLResponse:
     review = session.get(ImportReview, review_id)
@@ -376,12 +424,19 @@ def review_detail(request: Request, review_id: int, session: Session = Depends(d
             {"public_id": str(review_id), **_nav(session)},
             status_code=HTTP_404_NOT_FOUND,
         )
+    try:
+        parsed = json.loads(review.raw_data)
+    except json.JSONDecodeError:
+        parsed = {}
+    record = parsed if isinstance(parsed, dict) else {}
+    points = _review_map_points(record, review)
     return templates.TemplateResponse(
         request,
         "import/review_detail.html",
         {
             "review": review,
-            "record": json.loads(review.raw_data),
+            "record": record,
+            "map_points_json": json.dumps(points, ensure_ascii=False).replace("</", "<\\/"),
             "notice": _notice(request),
             **_nav(session),
         },
@@ -402,7 +457,14 @@ async def review_merge(request: Request, review_id: int, session: Session = Depe
     place = session.get(Place, place_id)
     if place is None:
         return RedirectResponse(f"/import/reviews/{review_id}", status_code=HTTP_303_SEE_OTHER)
-    resolve_merge(session, review, place)
+    try:
+        resolve_merge(session, review, place)
+    except (RuntimeError, ValueError):
+        _log.exception("review merge failed id=%s into place_id=%s", review_id, place.id)
+        return RedirectResponse(
+            f"/import/reviews/{review_id}?notice=merge_failed",
+            status_code=HTTP_303_SEE_OTHER,
+        )
     return RedirectResponse(f"/places/{place.public_id}?notice=merged", status_code=HTTP_303_SEE_OTHER)
 
 
@@ -411,7 +473,14 @@ def review_create(review_id: int, session: Session = Depends(db_session)):
     review = session.get(ImportReview, review_id)
     if review is None or review.status != "open":
         return RedirectResponse("/import/reviews", status_code=HTTP_303_SEE_OTHER)
-    place = resolve_create_new(session, review)
+    try:
+        place = resolve_create_new(session, review)
+    except (RuntimeError, ValueError):
+        _log.exception("review create failed id=%s", review_id)
+        return RedirectResponse(
+            f"/import/reviews/{review_id}?notice=create_failed",
+            status_code=HTTP_303_SEE_OTHER,
+        )
     return RedirectResponse(f"/places/{place.public_id}?notice=created_new", status_code=HTTP_303_SEE_OTHER)
 
 

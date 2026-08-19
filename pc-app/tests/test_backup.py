@@ -25,7 +25,7 @@ def _create_place(client, name: str) -> str:
 def test_backup_page_and_manual_backup(client) -> None:
     dashboard = client.get("/")
     assert dashboard.status_code == 200
-    assert "Záloha a obnova" in dashboard.text
+    assert "Záloha a obnova" not in dashboard.text
 
     page = client.get("/backup")
     assert page.status_code == 200

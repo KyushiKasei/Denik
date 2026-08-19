@@ -11,11 +11,15 @@ def is_http_url(value: Any) -> bool:
 
 
 def photo_display_url(photo: Any) -> str | None:
-    """Veřejné URL náhledu: thumbnail, jinak originál / source."""
+    """Veřejné URL náhledu: thumbnail, jinak originál / source. Bere PlacePhoto i dict z importu."""
     if photo is None:
         return None
-    for attr in ("thumbnail_url", "original_url", "source_url"):
-        value = getattr(photo, attr, None)
+    values: list[Any] = []
+    if isinstance(photo, dict):
+        values = [photo.get("thumbnail_url"), photo.get("original_url"), photo.get("source_url")]
+    else:
+        values = [getattr(photo, "thumbnail_url", None), getattr(photo, "original_url", None), getattr(photo, "source_url", None)]
+    for value in values:
         if is_http_url(value):
             return str(value).strip()
     return None

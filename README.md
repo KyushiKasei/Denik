@@ -64,10 +64,10 @@ Vynucená cesta: `$env:PAMATKY_DATA_DIR = "C:\cesta"`, nebo `$env:PAMATKY_PORTAB
 Okruh bez serveru:
 
 1. Na PC importovat zdroje (`/import`) nebo založit místo ručně.
-2. Exportovat `catalog.json` (přehled nebo `/places`).
+2. Exportovat `catalog.json` (Administrace → Výměna dat nebo `/places`).
 3. V PWA na záložce Nastavení nahrát `catalog.json`.
 4. Zapsat návštěvy, exportovat `diary.json`.
-5. Na PC na přehledu importovat `diary.json`.
+5. Na PC v Administraci → Výměna dat importovat `diary.json`.
 6. Úprava katalogu na PC → nový `catalog.json` → v PWA nahradit jen místa. Návštěvy zůstanou; místo, které v katalogu zmizelo, se ukáže jako „místo už není v katalogu“.
 
 CLI (z kořene projektu, s venv):

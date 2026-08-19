@@ -12,8 +12,9 @@ from math import ceil, cos, floor, radians
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import ImportReview, Place, PlaceSource
+from app.db.models import ImportReview, Place, PlacePhoto, PlaceSource
 from app.importers.base import CanonicalRecord
+from app.importers.wikimedia_commons.parser import commons_filename
 from app.services.geo import METERS_PER_DEG_LAT, MIN_COS_LAT, distance_m
 
 LEVEL_A = "MATCHED_EXACT"
@@ -109,6 +110,41 @@ def is_locality_alias(value: str | None, municipality: str | None = None) -> boo
     if municipality and normalize_label(value) == normalize_label(municipality):
         return True
     return False
+
+
+def photo_filenames_from_record(record: CanonicalRecord) -> set[str]:
+    """Soubory Wikimedia Commons na importovaném záznamu (P18 / Commons ID)."""
+    names: set[str] = set()
+    if record.source_type == "wikimedia_commons" and record.external_id:
+        names.add(str(record.external_id).replace(" ", "_"))
+    for source_type, external_id in record.all_external_ids():
+        if source_type == "wikimedia_commons" and external_id:
+            names.add(str(external_id).replace(" ", "_"))
+    image = record.image if isinstance(record.image, dict) else None
+    if image:
+        filename = image.get("filename")
+        if filename:
+            names.add(str(filename).replace(" ", "_"))
+        for key in ("original_url", "source_url", "thumbnail_url"):
+            found = commons_filename(image.get(key))
+            if found:
+                names.add(found)
+    names.discard("")
+    return names
+
+
+def photo_filenames_from_photos(photos: list) -> set[str]:
+    names: set[str] = set()
+    for photo in photos:
+        for url in (getattr(photo, "original_url", None), getattr(photo, "source_url", None), getattr(photo, "thumbnail_url", None)):
+            found = commons_filename(url)
+            if found:
+                names.add(found)
+    return names
+
+
+def photo_filenames_from_place(place: Place) -> set[str]:
+    return photo_filenames_from_photos(list(place.photos))
 
 
 def names_for_match(primary: str | None, alternatives: list[str], municipality: str | None = None) -> list[str]:
@@ -257,6 +293,7 @@ class _IndexEntry:
     district_key: str
     cell: tuple[int, int] | None
     ext_keys: list[tuple[str, str]]
+    photo_keys: list[str]
     active: bool
 
 
@@ -268,6 +305,7 @@ class MatchIndex:
         self.ignored: set[tuple[str, str]] = set()
         self.entries: dict[int, _IndexEntry] = {}
         self.by_ext: dict[tuple[str, str], list[Place]] = defaultdict(list)
+        self.by_photo: dict[str, list[Place]] = defaultdict(list)
         self.by_name: dict[str, set[int]] = defaultdict(set)
         self.by_muni: dict[str, set[int]] = defaultdict(set)
         self.by_district: dict[str, set[int]] = defaultdict(set)
@@ -301,6 +339,12 @@ class MatchIndex:
                 self.by_ext[key] = remaining
             else:
                 self.by_ext.pop(key, None)
+        for key in entry.photo_keys:
+            remaining = [item for item in self.by_photo.get(key, []) if item.id != place_id]
+            if remaining:
+                self.by_photo[key] = remaining
+            else:
+                self.by_photo.pop(key, None)
         if not entry.active:
             return
         for key in entry.name_keys:
@@ -335,12 +379,16 @@ class MatchIndex:
         sources = list(
             self.session.scalars(select(PlaceSource).where(PlaceSource.place_id == place.id)).all()
         )
+        photos = list(
+            self.session.scalars(select(PlacePhoto).where(PlacePhoto.place_id == place.id)).all()
+        )
         ext_keys: list[tuple[str, str]] = []
         for source in sources:
             if source.external_id:
                 key = (source.source_type, source.external_id)
                 self.by_ext[key].append(place)
                 ext_keys.append(key)
+        photo_keys = sorted(photo_filenames_from_photos(photos))
         active = place.archived_at is None
         name_keys = {
             normalize_name(name)
@@ -359,11 +407,14 @@ class MatchIndex:
             district_key=district_key,
             cell=cell,
             ext_keys=ext_keys,
+            photo_keys=photo_keys,
             active=active,
         )
         self.entries[place.id] = entry
         if not active:
             return
+        for key in photo_keys:
+            self.by_photo[key].append(place)
         for key in name_keys:
             self.by_name[key].add(place.id)
         if muni_key:
@@ -436,25 +487,40 @@ class MatchIndex:
         for source_type, external_id in record.all_external_ids():
             for place in self.by_ext.get((source_type, external_id), ()):
                 exact[place.id] = place
+        photo_hits: dict[int, Place] = {}
+        for filename in photo_filenames_from_record(record):
+            for place in self.by_photo.get(filename, ()):
+                photo_hits[place.id] = place
+                exact[place.id] = place
         if len(exact) == 1:
             place = next(iter(exact.values()))
             ids = ", ".join(f"{s}:{i}" for s, i in record.all_external_ids())
+            if place.id in photo_hits and not ids:
+                reason = f"A same commons photo ({next(iter(photo_filenames_from_record(record)))})"
+            elif place.id in photo_hits:
+                reason = f"A exact external id or same commons photo ({ids})"
+            else:
+                reason = f"A exact external id ({ids})"
             return MatchDecision(
                 level=LEVEL_A,
                 action="update",
-                reason=f"A exact external id ({ids})",
+                reason=reason,
                 place=place,
-                candidates=[_candidate(record, place, ["exact external id"])],
+                candidates=[_candidate(record, place, ["exact external id" if place.id not in photo_hits else "same commons photo"])],
             )
         if len(exact) > 1:
             candidates = [
-                _candidate(record, place, ["exact external id on different Place"])
+                _candidate(
+                    record,
+                    place,
+                    ["same commons photo"] if place.id in photo_hits else ["exact external id on different Place"],
+                )
                 for place in exact.values()
             ]
             return MatchDecision(
                 level=LEVEL_C,
                 action="review",
-                reason="A: stejné externí ID na více různých Place — neslučovat",
+                reason="A: stejné ID nebo stejná fotka na více různých Place — neslučovat",
                 candidates=sorted(candidates, key=lambda c: c.score, reverse=True),
             )
 

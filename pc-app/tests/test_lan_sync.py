@@ -147,7 +147,10 @@ def test_unlock_then_expire_blocks_download(client):
 
 
 def test_dashboard_enable_shows_pin(client):
-    page = client.get("/")
+    home = client.get("/")
+    assert home.status_code == 200
+    assert "Domácí Wi-Fi" not in home.text
+    page = client.get("/exchange")
     assert page.status_code == 200
     assert "Domácí Wi-Fi" in page.text
     enabled = client.post("/lan/enable", follow_redirects=True)
